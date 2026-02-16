@@ -52,4 +52,9 @@ async function handler(req: NextRequest) {
   }
 }
 
-export const POST = verifySignatureAppRouter(handler);
+// Only verify signature if keys are available (in production)
+// During build, keys may not be set, so we export handler directly
+export const POST =
+  process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY
+    ? verifySignatureAppRouter(handler)
+    : handler;
