@@ -11,7 +11,7 @@ export interface AnalysisJobPayload {
 }
 
 export async function enqueueAnalysisJob(payload: AnalysisJobPayload): Promise<void> {
-  const callbackUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/jobs/analyze-palm`;
+  const callbackUrl = `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/jobs/analyze-palm`;
   
   await qstash.publishJSON({
     url: callbackUrl,

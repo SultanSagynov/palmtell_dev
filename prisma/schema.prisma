@@ -62,6 +62,7 @@ model Reading {
   imageUrl     String?  @map("image_url")
   status       String   @default("pending") // 'pending' | 'processing' | 'completed' | 'failed'
   analysisJson Json?    @map("analysis_json")
+  error        String?  // error message if analysis failed
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

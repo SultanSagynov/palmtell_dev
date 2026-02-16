@@ -5,9 +5,11 @@ import { updateReadingStatus, AnalysisJobPayload } from "@/lib/queue";
 import { getSignedR2Url } from "@/lib/r2";
 
 async function handler(req: NextRequest) {
+  let readingId = "";
   try {
     const payload: AnalysisJobPayload = await req.json();
-    const { readingId, imageUrl, userId } = payload;
+    readingId = payload.readingId;
+    const { imageUrl, userId } = payload;
 
     // Update status to processing
     await updateReadingStatus(readingId, "processing");
@@ -35,11 +37,12 @@ async function handler(req: NextRequest) {
     console.error("Analysis job error:", error);
     
     // Try to update reading status if we have the readingId
-    try {
-      const payload: AnalysisJobPayload = await req.json();
-      await updateReadingStatus(payload.readingId, "failed", null, "analysis_error");
-    } catch (e) {
-      console.error("Failed to update reading status:", e);
+    if (readingId) {
+      try {
+        await updateReadingStatus(readingId, "failed", null, "analysis_error");
+      } catch (e) {
+        console.error("Failed to update reading status:", e);
+      }
     }
 
     return NextResponse.json(
