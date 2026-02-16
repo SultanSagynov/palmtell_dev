@@ -4,8 +4,9 @@ import { db } from "@/lib/db";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const { userId: clerkId } = await auth();
   if (!clerkId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,7 +19,7 @@ export async function PUT(
     }
 
     const profile = await db.profile.findFirst({
-      where: { id: params.id, userId: user.id },
+      where: { id, userId: user.id },
     });
 
     if (!profile) {
@@ -33,7 +34,7 @@ export async function PUT(
     };
 
     const updatedProfile = await db.profile.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(name && { name: name.trim() }),
         ...(dob !== undefined && { dob: dob ? new Date(dob) : null }),
@@ -53,8 +54,9 @@ export async function PUT(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const { userId: clerkId } = await auth();
   if (!clerkId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -67,7 +69,7 @@ export async function DELETE(
     }
 
     const profile = await db.profile.findFirst({
-      where: { id: params.id, userId: user.id },
+      where: { id, userId: user.id },
     });
 
     if (!profile) {
@@ -81,7 +83,7 @@ export async function DELETE(
       );
     }
 
-    await db.profile.delete({ where: { id: params.id } });
+    await db.profile.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -4,8 +4,9 @@ import { db } from "@/lib/db";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const { userId: clerkId } = await auth();
   if (!clerkId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,7 +20,7 @@ export async function GET(
   try {
     const reading = await db.reading.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: user.id, // Ensure user can only access their own readings
       },
       include: {

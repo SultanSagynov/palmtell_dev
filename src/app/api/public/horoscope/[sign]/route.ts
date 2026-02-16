@@ -8,9 +8,10 @@ const VALID_SIGNS = [
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { sign: string } }
+  { params }: { params: Promise<{ sign: string }> }
 ) {
-  const sign = params.sign.toLowerCase();
+  const { sign: signParam } = await params;
+  const sign = signParam.toLowerCase();
   
   if (!VALID_SIGNS.includes(sign)) {
     return NextResponse.json({ error: "Invalid zodiac sign" }, { status: 400 });
