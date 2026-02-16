@@ -45,9 +45,13 @@ export async function createLemonSqueezyCheckout(data: CheckoutData) {
       },
     },
     productOptions: {
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?success=true`,
+      redirectUrl: `${process.env.NEXT_PUBLIC_URL}/dashboard?success=true`,
     },
   });
+
+  if (!checkout.data) {
+    throw new Error('Failed to create checkout session');
+  }
 
   return checkout.data.data.attributes.url;
 }
