@@ -40,6 +40,12 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  if (!params?.sign) {
+    return {
+      title: "Horoscope Not Found",
+    };
+  }
+  
   const sign = params.sign.toLowerCase();
   
   if (!ZODIAC_SIGNS.includes(sign)) {
@@ -75,6 +81,10 @@ export async function generateStaticParams() {
 }
 
 export default async function HoroscopePage({ params }: PageProps) {
+  if (!params?.sign) {
+    notFound();
+  }
+  
   const sign = params.sign.toLowerCase();
   
   if (!ZODIAC_SIGNS.includes(sign)) {
