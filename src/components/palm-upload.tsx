@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Camera, Upload, X, CheckCircle, AlertCircle } from "lucide-react";
@@ -18,11 +18,34 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [validationStatus, setValidationStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [cameraAvailable, setCameraAvailable] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const { validateHandInImage, captureFromCamera, isLoading: isCapturing, error: cameraError } = useMediaPipeHands();
+  const { validateHandInImage, captureFromCamera, isLoading: isCapturing, error: cameraError, cleanup } = useMediaPipeHands();
+
+  // Check camera availability on mount
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const hasCamera = devices.some(device => device.kind === 'videoinput');
+          setCameraAvailable(hasCamera);
+        })
+        .catch(() => {
+          setCameraAvailable(false);
+        });
+    } else {
+      setCameraAvailable(false);
+    }
+
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
 
   const handleFileSelect = useCallback(async (file: File) => {
+    setUploadError(null);
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setValidationStatus('validating');
@@ -35,15 +58,26 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith('image/')) {
+        setUploadError('Please select a valid image file.');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setUploadError('Image file is too large. Maximum size is 10MB.');
+        return;
+      }
       handleFileSelect(file);
     }
   }, [handleFileSelect]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    setUploadError(null);
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
       handleFileSelect(file);
+    } else {
+      setUploadError('Please drag and drop a valid image file.');
     }
   }, [handleFileSelect]);
 
@@ -52,16 +86,23 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
   }, []);
 
   const handleCameraCapture = useCallback(async () => {
+    setUploadError(null);
     const file = await captureFromCamera();
     if (file) {
       handleFileSelect(file);
+    } else if (cameraError) {
+      setUploadError(cameraError);
     }
-  }, [captureFromCamera, handleFileSelect]);
+  }, [captureFromCamera, handleFileSelect, cameraError]);
 
   const handleUpload = useCallback(async () => {
-    if (!selectedFile || validationStatus !== 'valid') return;
+    if (!selectedFile || validationStatus !== 'valid') {
+      setUploadError('Please select a valid palm image with a hand detected.');
+      return;
+    }
 
     setIsUploading(true);
+    setUploadError(null);
     try {
       const formData = new FormData();
       formData.append('image', selectedFile);
@@ -75,12 +116,17 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Upload failed');
+        throw new Error(data.error || `Upload failed (${response.status})`);
+      }
+
+      if (!data.reading?.id) {
+        throw new Error('Invalid response from server');
       }
 
       onUploadSuccess(data.reading.id);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+      setUploadError(errorMessage);
       onUploadError(errorMessage);
     } finally {
       setIsUploading(false);
@@ -91,6 +137,7 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
     setSelectedFile(null);
     setPreviewUrl(null);
     setValidationStatus('idle');
+    setUploadError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -151,18 +198,32 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
                 <Upload className="h-4 w-4" />
                 Choose File
               </Button>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={handleCameraCapture}
-                disabled={isCapturing}
-              >
-                <Camera className="h-4 w-4" />
-                {isCapturing ? 'Opening Camera...' : 'Take Photo'}
-              </Button>
+              {cameraAvailable ? (
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={handleCameraCapture}
+                  disabled={isCapturing}
+                >
+                  <Camera className="h-4 w-4" />
+                  {isCapturing ? 'Opening Camera...' : 'Take Photo'}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled
+                  title="Camera not available on this device"
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Camera Not Available
+                </Button>
+              )}
             </div>
-            {cameraError && (
-              <p className="mt-2 text-xs text-red-500">{cameraError}</p>
+            {uploadError && (
+              <div className="mt-4 flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg w-full max-w-sm">
+                <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                <p className="text-sm text-destructive">{uploadError}</p>
+              </div>
             )}
           </div>
         ) : (
@@ -193,6 +254,13 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
               </div>
             )}
 
+            {uploadError && (
+              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                <p className="text-sm text-destructive">{uploadError}</p>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <Button
                 onClick={handleUpload}
@@ -201,7 +269,7 @@ export function PalmUpload({ profileId, onUploadSuccess, onUploadError }: PalmUp
               >
                 {isUploading ? 'Analyzing...' : 'Start Analysis'}
               </Button>
-              <Button variant="outline" onClick={clearSelection}>
+              <Button variant="outline" onClick={clearSelection} disabled={isUploading}>
                 Choose Different Photo
               </Button>
             </div>

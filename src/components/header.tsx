@@ -27,6 +27,12 @@ export function Header() {
             Pricing
           </Link>
           <Link
+            href="/blog"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Blog
+          </Link>
+          <Link
             href="/free-reading"
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -77,6 +83,13 @@ export function Header() {
                 onClick={() => setMobileOpen(false)}
               >
                 Pricing
+              </Link>
+              <Link
+                href="/blog"
+                className="text-sm text-muted-foreground"
+                onClick={() => setMobileOpen(false)}
+              >
+                Blog
               </Link>
               <Link
                 href="/free-reading"

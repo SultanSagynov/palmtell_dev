@@ -4,77 +4,93 @@ import { db } from "@/lib/db";
 import { getAccessTier, getReadingLimit } from "@/lib/access";
 
 export async function GET(req: NextRequest) {
-  const { userId: clerkId } = await auth();
-  if (!clerkId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await db.user.findUnique({ where: { clerkId } });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const profileId = req.nextUrl.searchParams.get("profile_id");
+
+    // Validate profile ID if provided
+    if (profileId && profileId.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Invalid profile ID" },
+        { status: 400 }
+      );
+    }
+
+    const readings = await db.reading.findMany({
+      where: {
+        userId: user.id,
+        ...(profileId ? { profileId } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      include: { profile: { select: { name: true, avatarEmoji: true } } },
+    });
+
+    return NextResponse.json({ readings });
+  } catch (error) {
+    console.error("[READINGS_GET_ERROR]", error);
+    return NextResponse.json(
+      { error: "Failed to fetch readings. Please try again later." },
+      { status: 500 }
+    );
   }
-
-  const user = await db.user.findUnique({ where: { clerkId } });
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-
-  const profileId = req.nextUrl.searchParams.get("profile_id");
-
-  const readings = await db.reading.findMany({
-    where: {
-      userId: user.id,
-      ...(profileId ? { profileId } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    include: { profile: { select: { name: true, avatarEmoji: true } } },
-  });
-
-  return NextResponse.json({ readings });
 }
 
 export async function POST(req: Request) {
-  const { userId: clerkId } = await auth();
-  if (!clerkId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const user = await db.user.findUnique({
-    where: { clerkId },
-    include: { subscription: true },
-  });
-
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-
-  const tier = getAccessTier(user, user.subscription);
-
-  // Check quota
-  if (tier === "expired") {
-    return NextResponse.json(
-      { error: "Trial expired. Please upgrade." },
-      { status: 402 }
-    );
-  }
-
-  const limit = getReadingLimit(tier);
-  if (limit !== Infinity) {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const count = await db.reading.count({
-      where: {
-        userId: user.id,
-        createdAt: { gte: startOfMonth },
-      },
+    const user = await db.user.findUnique({
+      where: { clerkId },
+      include: { subscription: true },
     });
 
-    if (count >= limit) {
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const tier = getAccessTier(user, user.subscription);
+
+    // Check quota
+    if (tier === "expired") {
       return NextResponse.json(
-        { error: "Reading quota reached for this period." },
-        { status: 429 }
+        { error: "Trial expired. Please upgrade." },
+        { status: 402 }
       );
     }
-  }
 
-  try {
+    const limit = getReadingLimit(tier);
+    if (limit !== Infinity) {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const count = await db.reading.count({
+        where: {
+          userId: user.id,
+          createdAt: { gte: startOfMonth },
+        },
+      });
+
+      if (count >= limit) {
+        return NextResponse.json(
+          { error: "Reading quota reached for this period." },
+          { status: 429 }
+        );
+      }
+    }
+
     // Check if this is a JSON request (temp image flow) or FormData (direct upload)
     const contentType = req.headers.get("content-type");
     let profileId: string;
@@ -89,7 +105,7 @@ export async function POST(req: Request) {
       tempImageUrl = body.tempImageUrl;
       tempImageKey = body.tempImageKey;
 
-      if (!profileId) {
+      if (!profileId || profileId.trim().length === 0) {
         return NextResponse.json(
           { error: "Profile ID is required" },
           { status: 400 }
@@ -108,7 +124,7 @@ export async function POST(req: Request) {
       profileId = formData.get("profileId") as string;
       image = formData.get("image") as File;
 
-      if (!profileId) {
+      if (!profileId || profileId.trim().length === 0) {
         return NextResponse.json(
           { error: "Profile ID is required" },
           { status: 400 }
@@ -214,9 +230,24 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ reading: { ...reading, imageUrl } }, { status: 201 });
   } catch (error) {
-    console.error("Reading creation error:", error);
+    console.error("[READINGS_POST_ERROR]", error);
+    
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+    
+    if (error instanceof Error && error.message.includes("R2")) {
+      return NextResponse.json(
+        { error: "Failed to upload image. Please try again later." },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Failed to create reading" },
+      { error: "Failed to create reading. Please try again later." },
       { status: 500 }
     );
   }
