@@ -83,8 +83,8 @@ export default function DashboardPage() {
       // Load user data
       const userRes = await fetch("/api/user/access");
       if (userRes.ok) {
-        const userData = await userRes.json();
-        setUserData(userData.user);
+        const accessData = await userRes.json();
+        setUserData(accessData);
       }
     } catch (error) {
       console.error("Failed to load dashboard data:", error);

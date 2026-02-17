@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAccessTier } from "@/lib/access";
+import { getAccessTier, getProfileLimit, getReadingLimit } from "@/lib/access";
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -20,10 +20,20 @@ export async function GET() {
     }
 
     const tier = getAccessTier(user, user.subscription);
+    const profileLimit = getProfileLimit(tier);
+    const readingLimit = getReadingLimit(tier);
     
     return NextResponse.json({
       tier,
+      accessTier: tier, // Also provide as accessTier for compatibility
+      profileLimit,
+      readingLimit,
+      trialStartedAt: user.trialStartedAt?.toISOString(),
       trialExpiresAt: user.trialExpiresAt?.toISOString(),
+      subscription: user.subscription ? {
+        status: user.subscription.status,
+        plan: user.subscription.plan,
+      } : null,
     });
   } catch (error) {
     console.error("Failed to fetch user access:", error);

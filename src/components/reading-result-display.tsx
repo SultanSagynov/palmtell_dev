@@ -66,7 +66,7 @@ export function ReadingResultDisplay({
     fetch("/api/user/access")
       .then(res => res.json())
       .then(data => {
-        setUserAccessTier(data.tier || "trial");
+        setUserAccessTier(data.tier || data.accessTier || "trial");
       })
       .catch(console.error);
   }, []);

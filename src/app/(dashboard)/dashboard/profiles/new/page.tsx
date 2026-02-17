@@ -42,7 +42,10 @@ export default function NewProfilePage() {
         throw new Error("Failed to load user data");
       }
       const data = await response.json();
-      setUserData(data);
+      setUserData({
+        accessTier: data.tier || data.accessTier || "trial",
+        profileLimit: data.profileLimit || 1,
+      });
     } catch (error) {
       console.error("Failed to load user data:", error);
       setError("Failed to load profile information");

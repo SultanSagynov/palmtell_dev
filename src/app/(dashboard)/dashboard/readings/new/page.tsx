@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PalmUpload } from "@/components/palm-upload";
+import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { DISCLAIMER } from "@/lib/constants";
+import Link from "next/link";
+import { AlertCircle } from "lucide-react";
 
 export default function NewReadingPage() {
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -21,8 +24,8 @@ export default function NewReadingPage() {
         const data = await response.json();
         setProfiles(data.profiles || []);
         
-        // Select default profile
-        const defaultProfile = data.profiles?.find((p: any) => p.isDefault);
+        // Select default profile or first profile
+        const defaultProfile = data.profiles?.find((p: any) => p.isDefault) || data.profiles?.[0];
         if (defaultProfile) {
           setSelectedProfileId(defaultProfile.id);
         }
@@ -54,6 +57,35 @@ export default function NewReadingPage() {
           <div className="h-8 bg-muted rounded w-1/3 mb-2"></div>
           <div className="h-4 bg-muted rounded w-2/3"></div>
         </div>
+      </div>
+    );
+  }
+
+  // Show message if no profiles exist
+  if (profiles.length === 0) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-8">
+        <div>
+          <h1 className="font-serif text-3xl font-bold">New Palm Reading</h1>
+          <p className="mt-1 text-muted-foreground">
+            Upload a clear photo of your palm to begin the AI analysis.
+          </p>
+        </div>
+
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex items-start gap-3 pt-6">
+            <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-destructive">No profiles found</p>
+              <p className="text-sm text-destructive/80 mt-1 mb-4">
+                You need to create a profile before you can upload readings.
+              </p>
+              <Link href="/dashboard/profiles/new">
+                <Button size="sm">Create Profile</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

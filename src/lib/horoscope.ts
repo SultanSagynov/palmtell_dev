@@ -1,14 +1,31 @@
 import { Redis } from "@upstash/redis";
-import OpenAI from "openai";
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || "",
   token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
 });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
-});
+// Lazy initialize OpenAI client only when needed (server-side only)
+let openai: any = null;
+
+function getOpenAIClient() {
+  if (typeof window !== "undefined") {
+    // Running in browser - should never happen for these functions
+    throw new Error("OpenAI functions should not be called from browser");
+  }
+  if (!openai) {
+    try {
+      const OpenAI = require("openai").default;
+      openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY || "",
+      });
+    } catch (error) {
+      console.error("Failed to initialize OpenAI:", error);
+      throw error;
+    }
+  }
+  return openai;
+}
 
 const ZODIAC_SIGNS = [
   "aries", "taurus", "gemini", "cancer", "leo", "virgo",
@@ -147,7 +164,8 @@ Return ONLY valid JSON with this structure:
   "theme": "string"
 }`;
 
-    const response = await openai.chat.completions.create({
+    const openaiClient = getOpenAIClient();
+    const response = await openaiClient.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.7,
       messages: [{ role: "user", content: prompt }],
