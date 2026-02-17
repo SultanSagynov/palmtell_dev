@@ -16,16 +16,17 @@ import {
   Loader2,
   Users
 } from "lucide-react";
-// import { CompatibilityReading } from "@/lib/compatibility";
 
 interface CompatibilityReading {
   profileA: {
     name: string;
     sign?: string;
+    emoji?: string;
   };
   profileB: {
     name: string;
     sign?: string;
+    emoji?: string;
   };
   overallScore: number;
   summary: string;
@@ -34,9 +35,14 @@ interface CompatibilityReading {
     emotional: { score: number; description: string };
     intellectual: { score: number; description: string };
     physical: { score: number; description: string };
+    lifestyle?: { score: number; description: string };
+    goals?: { score: number; description: string };
     strengths: string[];
     challenges: string[];
   };
+  strengths?: string[];
+  challenges?: string[];
+  advice?: string;
   zodiacCompatibility?: {
     signA: string;
     signB: string;
@@ -64,11 +70,16 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter profiles that have completed readings
-  const profilesWithReadings = profiles.filter(p => p.dob); // Simplified check
+  const generateCompatibility = async () => {
+    if (!selectedProfileA || !selectedProfileB) {
+      setError("Please select two profiles for compatibility analysis");
+      return;
+    }
 
-  const handleGenerateCompatibility = async () => {
-    if (!selectedProfileA || !selectedProfileB) return;
+    if (selectedProfileA === selectedProfileB) {
+      setError("Please select two different profiles");
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -78,8 +89,8 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          profile_id_a: selectedProfileA,
-          profile_id_b: selectedProfileB,
+          profileAId: selectedProfileA,
+          profileBId: selectedProfileB,
         }),
       });
 
@@ -90,37 +101,35 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
       }
 
       setCompatibility(data.compatibility);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to generate compatibility");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to generate compatibility reading";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-500";
-    if (score >= 60) return "text-yellow-500";
-    return "text-red-500";
+    if (score >= 80) return "text-green-600";
+    if (score >= 60) return "text-yellow-600";
+    return "text-red-600";
   };
 
-  const getScoreBg = (score: number) => {
-    if (score >= 80) return "bg-green-500";
-    if (score >= 60) return "bg-yellow-500";
-    return "bg-red-500";
+  const getScoreBadgeVariant = (score: number) => {
+    if (score >= 80) return "default";
+    if (score >= 60) return "secondary";
+    return "destructive";
   };
 
-  if (profilesWithReadings.length < 2) {
+  if (profiles.length < 2) {
     return (
       <Card className="border-border/40">
-        <CardContent className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="font-semibold mb-2">Need More Profiles</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              You need at least 2 profiles with completed palm readings to generate compatibility reports.
-            </p>
-            <Button variant="outline">Add Profile</Button>
-          </div>
+        <CardContent className="flex flex-col items-center justify-center py-8">
+          <Users className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="font-semibold mb-2">Not Enough Profiles</h3>
+          <p className="text-sm text-muted-foreground text-center">
+            You need at least 2 profiles with completed palm readings to generate compatibility analysis.
+          </p>
         </CardContent>
       </Card>
     );
@@ -133,74 +142,76 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Heart className="h-5 w-5" />
-            Compatibility Reading
-            <Crown className="h-4 w-4 text-accent" />
+            Compatibility Analysis
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">First Person</label>
+              <label className="text-sm font-medium mb-2 block">First Profile</label>
               <div className="space-y-2">
-                {profilesWithReadings.map((profile) => (
+                {profiles.map((profile) => (
                   <button
                     key={profile.id}
                     onClick={() => setSelectedProfileA(profile.id)}
-                    disabled={profile.id === selectedProfileB}
-                    className={`w-full p-3 rounded-lg text-left transition-colors ${
+                    className={`w-full p-3 text-left rounded-lg border transition-colors ${
                       selectedProfileA === profile.id
-                        ? "bg-primary text-primary-foreground"
-                        : profile.id === selectedProfileB
-                        ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                        : "bg-muted hover:bg-muted/80"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50"
                     }`}
                   >
-                    {profile.avatarEmoji && (
-                      <span className="mr-2">{profile.avatarEmoji}</span>
-                    )}
-                    {profile.name}
+                    <div className="flex items-center gap-2">
+                      {profile.avatarEmoji && (
+                        <span className="text-lg">{profile.avatarEmoji}</span>
+                      )}
+                      <span className="font-medium">{profile.name}</span>
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-2 block">Second Person</label>
+              <label className="text-sm font-medium mb-2 block">Second Profile</label>
               <div className="space-y-2">
-                {profilesWithReadings.map((profile) => (
+                {profiles.map((profile) => (
                   <button
                     key={profile.id}
                     onClick={() => setSelectedProfileB(profile.id)}
-                    disabled={profile.id === selectedProfileA}
-                    className={`w-full p-3 rounded-lg text-left transition-colors ${
+                    className={`w-full p-3 text-left rounded-lg border transition-colors ${
                       selectedProfileB === profile.id
-                        ? "bg-primary text-primary-foreground"
-                        : profile.id === selectedProfileA
-                        ? "bg-muted/50 text-muted-foreground cursor-not-allowed"
-                        : "bg-muted hover:bg-muted/80"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50"
                     }`}
                   >
-                    {profile.avatarEmoji && (
-                      <span className="mr-2">{profile.avatarEmoji}</span>
-                    )}
-                    {profile.name}
+                    <div className="flex items-center gap-2">
+                      {profile.avatarEmoji && (
+                        <span className="text-lg">{profile.avatarEmoji}</span>
+                      )}
+                      <span className="font-medium">{profile.name}</span>
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          <Button
-            onClick={handleGenerateCompatibility}
+          <Button 
+            onClick={generateCompatibility}
             disabled={!selectedProfileA || !selectedProfileB || isLoading}
-            className="w-full gap-2"
+            className="w-full"
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Analyzing Compatibility...
+              </>
             ) : (
-              <Heart className="h-4 w-4" />
+              <>
+                <Heart className="h-4 w-4 mr-2" />
+                Generate Compatibility Reading
+              </>
             )}
-            {isLoading ? "Analyzing Compatibility..." : "Generate Compatibility Report"}
           </Button>
 
           {error && (
@@ -216,19 +227,24 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
           className="space-y-6"
         >
           {/* Overall Score */}
           <Card className="border-border/40">
-            <CardContent className="pt-6">
-              <div className="text-center">
+            <CardHeader>
+              <CardTitle>Compatibility Score</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center space-y-4">
                 <div className="flex items-center justify-center gap-4 mb-4">
                   <div className="text-center">
                     {compatibility.profileA.emoji && (
                       <span className="text-2xl">{compatibility.profileA.emoji}</span>
                     )}
                     <p className="font-medium">{compatibility.profileA.name}</p>
+                    {compatibility.profileA.sign && (
+                      <Badge variant="outline" className="text-xs mt-1">{compatibility.profileA.sign}</Badge>
+                    )}
                   </div>
                   <Heart className="h-8 w-8 text-red-500" />
                   <div className="text-center">
@@ -236,90 +252,25 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
                       <span className="text-2xl">{compatibility.profileB.emoji}</span>
                     )}
                     <p className="font-medium">{compatibility.profileB.name}</p>
+                    {compatibility.profileB.sign && (
+                      <Badge variant="outline" className="text-xs mt-1">{compatibility.profileB.sign}</Badge>
+                    )}
                   </div>
                 </div>
                 
-                <div className={`text-4xl font-bold mb-2 ${getScoreColor(compatibility.overallScore)}`}>
-                  {compatibility.overallScore}%
+                <div className="space-y-2">
+                  <div className={`text-4xl font-bold ${getScoreColor(compatibility.overallScore)}`}>
+                    {compatibility.overallScore}%
+                  </div>
+                  <Badge variant={getScoreBadgeVariant(compatibility.overallScore)} className="text-sm">
+                    {compatibility.overallScore >= 80 ? "Excellent Match" : 
+                     compatibility.overallScore >= 60 ? "Good Match" : "Challenging Match"}
+                  </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">Overall Compatibility</p>
                 
-                <Progress 
-                  value={compatibility.overallScore} 
-                  className="w-full max-w-sm mx-auto"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Summary */}
-          <Card className="border-border/40">
-            <CardHeader>
-              <CardTitle>Compatibility Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-relaxed">{compatibility.summary}</p>
-            </CardContent>
-          </Card>
-
-          {/* Category Scores */}
-          <Card className="border-border/40">
-            <CardHeader>
-              <CardTitle>Detailed Analysis</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4">
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <MessageCircle className="h-5 w-5 text-blue-500" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">Communication</span>
-                      <span className={`font-bold ${getScoreColor(compatibility.categories.communication.score)}`}>
-                        {compatibility.categories.communication.score}%
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{compatibility.categories.communication.description}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Heart className="h-5 w-5 text-red-500" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">Emotional</span>
-                      <span className={`font-bold ${getScoreColor(compatibility.categories.emotional.score)}`}>
-                        {compatibility.categories.emotional.score}%
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{compatibility.categories.emotional.description}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Home className="h-5 w-5 text-green-500" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">Lifestyle</span>
-                      <span className={`font-bold ${getScoreColor(compatibility.categories.lifestyle.score)}`}>
-                        {compatibility.categories.lifestyle.score}%
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{compatibility.categories.lifestyle.description}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Target className="h-5 w-5 text-purple-500" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">Goals</span>
-                      <span className={`font-bold ${getScoreColor(compatibility.categories.goals.score)}`}>
-                        {compatibility.categories.goals.score}%
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{compatibility.categories.goals.description}</p>
-                  </div>
-                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {compatibility.summary}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -332,7 +283,7 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {compatibility.strengths.map((strength, index) => (
+                  {compatibility.strengths?.map((strength: string, index: number) => (
                     <div key={index} className="flex items-start gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full mt-2 shrink-0" />
                       <p className="text-sm">{strength}</p>
@@ -348,7 +299,7 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {compatibility.challenges.map((challenge, index) => (
+                  {compatibility.challenges?.map((challenge: string, index: number) => (
                     <div key={index} className="flex items-start gap-2">
                       <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 shrink-0" />
                       <p className="text-sm">{challenge}</p>
@@ -360,14 +311,16 @@ export function CompatibilityDisplay({ profiles }: CompatibilityDisplayProps) {
           </div>
 
           {/* Advice */}
-          <Card className="border-border/40">
-            <CardHeader>
-              <CardTitle>Relationship Advice</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-relaxed">{compatibility.advice}</p>
-            </CardContent>
-          </Card>
+          {compatibility.advice && (
+            <Card className="border-border/40">
+              <CardHeader>
+                <CardTitle>Relationship Advice</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-relaxed">{compatibility.advice}</p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Zodiac Compatibility */}
           {compatibility.zodiacCompatibility && (
