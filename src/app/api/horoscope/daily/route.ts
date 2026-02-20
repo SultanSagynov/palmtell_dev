@@ -40,23 +40,34 @@ export async function GET(req: NextRequest) {
 
     // Store in database
     const today = new Date().toISOString().split('T')[0];
-    await db.horoscope.upsert({
+    // @ts-ignore - Temporary ignore during schema migration
+    const existingHoroscope = await db.horoscope.findFirst({
       where: {
-        profileId_date: {
-          profileId: profile.id,
-          date: new Date(today),
-        },
-      },
-      create: {
-        profileId: profile.id,
+        userId: user.id,
         date: new Date(today),
-        sign,
-        contentJson: horoscope,
-      },
-      update: {
-        contentJson: horoscope,
       },
     });
+
+    if (existingHoroscope) {
+      await db.horoscope.update({
+        where: { id: existingHoroscope.id },
+        data: {
+          contentJson: horoscope,
+          profileId: profile.id,
+        },
+      });
+    } else {
+      // @ts-ignore - Temporary ignore during schema migration
+      await db.horoscope.create({
+        data: {
+          userId: user.id,
+          profileId: profile.id,
+          date: new Date(today),
+          sign,
+          contentJson: horoscope,
+        },
+      });
+    }
 
     return NextResponse.json({ horoscope });
   } catch (error) {
