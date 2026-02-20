@@ -11,13 +11,14 @@ import { format } from "date-fns";
 export default function PalmConfirmPage() {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<{
     photoUrl?: string;
     dob?: string;
     photoKey?: string;
   } | null>(null);
-  
+
   const router = useRouter();
 
   useEffect(() => {
@@ -29,7 +30,7 @@ export default function PalmConfirmPage() {
           if (data.photoKey && data.dob) {
             const formattedDob = format(new Date(data.dob), 'MMMM d, yyyy');
             setSessionData({
-              photoUrl: data.photoUrl, // Use signed URL from API
+              photoUrl: data.photoUrl,
               dob: formattedDob,
               photoKey: data.photoKey
             });
@@ -37,10 +38,11 @@ export default function PalmConfirmPage() {
         }
       } catch (error) {
         console.error('Failed to fetch session data:', error);
-        setSessionData(null);
+      } finally {
+        setIsSessionLoading(false);
       }
     };
-    
+
     fetchSessionData();
   }, []);
 
@@ -73,6 +75,14 @@ export default function PalmConfirmPage() {
       setIsValidating(false);
     }
   };
+
+  if (isSessionLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!sessionData) {
     return (

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,33 +14,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, X } from "lucide-react";
+import { Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PLANS } from "@/lib/constants";
 
 type BillingInterval = "monthly" | "annual";
 
 const tiers = [
-  {
-    key: "basic" as const,
-    name: PLANS.basic.name,
-    description: "Perfect for getting started with palm reading.",
-    monthlyPrice: PLANS.basic.price,
-    annualPrice: PLANS.basic.price * 12,
-    features: [
-      { text: "1 reading per month", included: true },
-      { text: "Personality, Life Path, Career", included: true },
-      { text: "Your palm locked forever", included: true },
-      { text: "Relationships & Health", included: false },
-      { text: "Lucky Numbers", included: false },
-      { text: "Daily horoscope", included: false },
-      { text: "Monthly horoscope", included: false },
-      { text: "PDF export", included: false },
-    ],
-    cta: "Start with Basic",
-    href: "/palm/upload",
-    highlighted: false,
-  },
   {
     key: "pro" as const,
     name: PLANS.pro.name,
@@ -47,7 +29,7 @@ const tiers = [
     annualPrice: PLANS.pro.annualPrice || PLANS.pro.price * 12,
     features: [
       { text: "5 readings per month", included: true },
-      { text: "All Basic features", included: true },
+      { text: "Personality, Life Path, Career", included: true },
       { text: "Relationships & Health sections", included: true },
       { text: "Lucky Numbers", included: true },
       { text: "Daily horoscope", included: true },
@@ -55,7 +37,6 @@ const tiers = [
       { text: "PDF export", included: false },
     ],
     cta: "Choose Pro",
-    href: "/palm/upload",
     highlighted: true,
   },
   {
@@ -73,13 +54,62 @@ const tiers = [
       { text: "Early access to new features", included: true },
     ],
     cta: "Go Ultimate",
-    href: "/palm/upload",
     highlighted: false,
   },
 ];
 
 export default function PricingPage() {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const { isSignedIn } = useUser();
+  const router = useRouter();
+
+  const handlePlanSelect = async (plan: "pro" | "ultimate") => {
+    if (!isSignedIn) {
+      router.push(`/sign-up?redirect_url=/pricing`);
+      return;
+    }
+
+    setLoadingPlan(plan);
+    try {
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan,
+          interval: interval === "monthly" ? "month" : "year",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.requiresCancellation) {
+          alert(
+            `You already have an active ${data.currentPlan} plan. Please cancel it from billing settings before switching plans.`
+          );
+          router.push("/dashboard/billing");
+          return;
+        }
+        // User not found in DB — send them to upload flow first
+        if (response.status === 404) {
+          router.push("/palm/upload");
+          return;
+        }
+        throw new Error(data.error || "Failed to create checkout");
+      }
+
+      const checkoutUrl = data.checkoutUrl || data.url;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      alert("Failed to start checkout. Please try again.");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <section className="py-20">
@@ -123,11 +153,12 @@ export default function PricingPage() {
         </div>
 
         {/* Cards */}
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-12 grid gap-6 lg:grid-cols-2 max-w-3xl mx-auto">
           {tiers.map((tier) => {
             const price =
               interval === "monthly" ? tier.monthlyPrice : tier.annualPrice;
             const period = interval === "monthly" ? "/mo" : "/yr";
+            const isLoading = loadingPlan === tier.key;
 
             return (
               <Card
@@ -151,12 +182,8 @@ export default function PricingPage() {
                 </CardHeader>
                 <CardContent className="flex-1">
                   <div className="mb-6">
-                    <span className="text-4xl font-bold">
-                      {price === 0 ? "Free" : `$${price}`}
-                    </span>
-                    {price > 0 && (
-                      <span className="text-muted-foreground">{period}</span>
-                    )}
+                    <span className="text-4xl font-bold">${price}</span>
+                    <span className="text-muted-foreground">{period}</span>
                   </div>
                   <ul className="space-y-3">
                     {tier.features.map((feature) => (
@@ -181,19 +208,38 @@ export default function PricingPage() {
                   </ul>
                 </CardContent>
                 <CardFooter>
-                  <Link href={tier.href} className="w-full">
-                    <Button
-                      className="w-full"
-                      variant={tier.highlighted ? "default" : "outline"}
-                    >
-                      {tier.cta}
-                    </Button>
-                  </Link>
+                  <Button
+                    className="w-full"
+                    variant={tier.highlighted ? "default" : "outline"}
+                    onClick={() => handlePlanSelect(tier.key)}
+                    disabled={isLoading || loadingPlan !== null}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      tier.cta
+                    )}
+                  </Button>
                 </CardFooter>
               </Card>
             );
           })}
         </div>
+
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          {!isSignedIn && (
+            <>
+              Already have an account?{" "}
+              <Link href="/sign-in" className="underline hover:text-foreground">
+                Sign in
+              </Link>{" "}
+              to manage your subscription.
+            </>
+          )}
+        </p>
       </div>
     </section>
   );

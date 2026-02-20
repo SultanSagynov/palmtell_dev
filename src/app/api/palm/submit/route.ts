@@ -1,11 +1,17 @@
+import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createPalmSession } from "@/lib/session-storage";
-import { validatePalmImage } from "@/lib/palm-validation";
 import { uploadToR2 } from "@/lib/r2";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
+    // Require authentication — palm upload must be tied to a user account
+    const { userId: clerkId } = await auth();
+    if (!clerkId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const image = formData.get('image') as File;
     const dob = formData.get('dob') as string;
