@@ -167,11 +167,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    // Create reading in pending state
+    // Create reading in pending state with placeholder imageUrl
     const reading = await db.reading.create({
       data: {
         userId: user.id,
         profileId,
+        imageUrl: "", // Placeholder, will be updated after upload
         status: "pending",
       },
     });
