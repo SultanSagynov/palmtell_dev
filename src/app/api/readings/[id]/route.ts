@@ -23,14 +23,6 @@ export async function GET(
         id,
         userId: user.id, // Ensure user can only access their own readings
       },
-      include: {
-        profile: {
-          select: {
-            name: true,
-            avatarEmoji: true,
-          },
-        },
-      },
     });
 
     if (!reading) {

@@ -11,36 +11,21 @@ import {
   BookOpen, 
   Star, 
   ArrowRight, 
-  Plus, 
   Clock,
   Calendar,
   User
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-
-interface Profile {
-  id: string;
-  name: string;
-  avatarEmoji?: string;
-  isDefault: boolean;
-  _count: {
-    readings: number;
-  };
-}
 
 interface Reading {
   id: string;
   createdAt: string;
-  status: string;
-  profile: {
-    name: string;
-    avatarEmoji?: string;
-  };
+  analysisJson: any;
 }
 
 interface UserData {
-  trialStartedAt?: string;
-  trialExpiresAt?: string;
+  palmConfirmed: boolean;
+  palmPhotoUrl: string | null;
+  dob: string | null;
   subscription?: {
     plan: string;
     status: string;
@@ -49,8 +34,6 @@ interface UserData {
 
 export default function DashboardPage() {
   const { user } = useUser();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
   const [readings, setReadings] = useState<Reading[]>([]);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,25 +42,13 @@ export default function DashboardPage() {
     loadDashboardData();
   }, []);
 
-  useEffect(() => {
-    if (selectedProfileId) {
-      loadReadings(selectedProfileId);
-    }
-  }, [selectedProfileId]);
-
   const loadDashboardData = async () => {
     try {
-      // Load profiles
-      const profilesRes = await fetch("/api/profiles");
-      if (profilesRes.ok) {
-        const profilesData = await profilesRes.json();
-        setProfiles(profilesData.profiles || []);
-        
-        // Select default profile
-        const defaultProfile = profilesData.profiles?.find((p: Profile) => p.isDefault);
-        if (defaultProfile) {
-          setSelectedProfileId(defaultProfile.id);
-        }
+      // Load user readings (no profile filtering needed)
+      const readingsRes = await fetch("/api/readings");
+      if (readingsRes.ok) {
+        const readingsData = await readingsRes.json();
+        setReadings(readingsData.readings || []);
       }
 
       // Load user data
@@ -93,53 +64,18 @@ export default function DashboardPage() {
     }
   };
 
-  const loadReadings = async (profileId: string) => {
-    try {
-      const response = await fetch(`/api/readings?profile_id=${profileId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setReadings(data.readings || []);
-      }
-    } catch (error) {
-      console.error("Failed to load readings:", error);
-    }
-  };
-
-  const getTrialInfo = () => {
-    if (!userData?.trialStartedAt || !userData?.trialExpiresAt) {
-      return null;
-    }
-
-    const expiresAt = new Date(userData.trialExpiresAt);
-    const now = new Date();
-    const daysRemaining = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
-    return {
-      daysRemaining: Math.max(0, daysRemaining),
-      isExpired: daysRemaining <= 0
-    };
-  };
-
   const getPlanBadge = () => {
-    const trialInfo = getTrialInfo();
-    
     if (userData?.subscription?.status === "active") {
+      const planName = userData.subscription.plan === "basic" ? "Basic" : 
+                      userData.subscription.plan === "pro" ? "Pro" : "Ultimate";
       return (
         <Badge variant="default" className="bg-green-500">
-          {userData.subscription.plan === "pro" ? "Pro" : "Ultimate"}
+          {planName}
         </Badge>
       );
     }
     
-    if (trialInfo?.isExpired) {
-      return <Badge variant="destructive">Trial Expired</Badge>;
-    }
-    
-    if (trialInfo) {
-      return <Badge variant="secondary">Trial ({trialInfo.daysRemaining}d left)</Badge>;
-    }
-    
-    return <Badge variant="outline">Free</Badge>;
+    return <Badge variant="destructive">No Active Plan</Badge>;
   };
 
   if (loading) {
@@ -149,9 +85,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const selectedProfile = profiles.find(p => p.id === selectedProfileId);
-  const trialInfo = getTrialInfo();
 
   return (
     <div className="space-y-8">
@@ -165,68 +98,47 @@ export default function DashboardPage() {
         {getPlanBadge()}
       </div>
 
-      {/* Trial countdown banner */}
-      {trialInfo && !trialInfo.isExpired && (
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/50">
-          <CardContent className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-amber-600" />
-              <div>
-                <p className="font-medium text-amber-900 dark:text-amber-100">
-                  {trialInfo.daysRemaining} days of full access remaining
-                </p>
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  Upgrade to keep unlimited access to all reading sections
-                </p>
+      {/* Palm status card */}
+      {userData && (
+        <Card className="border-border/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Hand className="h-5 w-5" />
+              Your Palm Reading Profile
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Hand className="h-8 w-8 text-primary" />
               </div>
+              <div className="flex-1">
+                <p className="font-medium">
+                  {userData.palmConfirmed ? "Palm Confirmed" : "Palm Setup Required"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {userData.palmConfirmed 
+                    ? "Your palm is locked and ready for readings"
+                    : "Complete palm setup to start getting readings"
+                  }
+                </p>
+                {userData.dob && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Birth date: {new Date(userData.dob).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              {!userData.palmConfirmed && (
+                <Link href="/palm/upload">
+                  <Button size="sm">
+                    Setup Palm
+                  </Button>
+                </Link>
+              )}
             </div>
-            <Link href="/pricing">
-              <Button size="sm" className="bg-amber-600 hover:bg-amber-700">
-                Upgrade Now
-              </Button>
-            </Link>
           </CardContent>
         </Card>
       )}
-
-      {/* Profile switcher */}
-      <Card className="border-border/40">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Active Profile
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {profiles.map((profile) => (
-              <button
-                key={profile.id}
-                onClick={() => setSelectedProfileId(profile.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
-                  selectedProfileId === profile.id
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
-                <span className="text-lg">
-                  {profile.avatarEmoji || "👤"}
-                </span>
-                <span className="font-medium">{profile.name}</span>
-                {profile.isDefault && (
-                  <Badge variant="secondary" className="text-xs">Default</Badge>
-                )}
-              </button>
-            ))}
-            <Link href="/dashboard/profiles/new">
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border hover:border-primary/50 transition-colors">
-                <Plus className="h-4 w-4" />
-                <span>Add Profile</span>
-              </button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Quick actions */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -286,63 +198,61 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Reading history for selected profile */}
-      {selectedProfile && (
-        <Card className="border-border/40">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Recent Readings - {selectedProfile.name}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {readings.length > 0 ? (
-              <div className="space-y-3">
-                {readings.slice(0, 3).map((reading) => (
-                  <Link key={reading.id} href={`/dashboard/readings/${reading.id}`}>
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Hand className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Palm Reading</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(reading.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
+      {/* Reading history */}
+      <Card className="border-border/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            Recent Readings
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {readings.length > 0 ? (
+            <div className="space-y-3">
+              {readings.slice(0, 3).map((reading) => (
+                <Link key={reading.id} href={`/dashboard/readings/${reading.id}`}>
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Hand className="h-5 w-5 text-primary" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={reading.status === 'completed' ? 'default' : 'secondary'}>
-                          {reading.status}
-                        </Badge>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">Palm Reading</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(reading.createdAt).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
-                  </Link>
-                ))}
-                {readings.length > 3 && (
-                  <Link href="/dashboard/readings">
-                    <Button variant="outline" size="sm" className="w-full">
-                      View All {readings.length} Readings
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Hand className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                <p className="text-muted-foreground">No readings yet for {selectedProfile.name}</p>
-                <Link href="/dashboard/readings/new" className="mt-4 inline-block">
-                  <Button size="sm">
-                    Create First Reading
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default">
+                        Completed
+                      </Badge>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+              {readings.length > 3 && (
+                <Link href="/dashboard/readings">
+                  <Button variant="outline" size="sm" className="w-full">
+                    View All {readings.length} Readings
                   </Button>
                 </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Hand className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">No readings yet</p>
+              <Link href="/dashboard/readings/new" className="mt-4 inline-block">
+                <Button size="sm">
+                  Create First Reading
+                </Button>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

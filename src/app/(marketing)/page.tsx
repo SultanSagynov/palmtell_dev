@@ -18,9 +18,9 @@ import {
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Palmtell — AI Palm Reading | Discover Your Destiny",
+  title: "PalmSight — AI Palm Reading | Discover Your Destiny",
   description:
-    "Upload a photo of your palm and get instant AI-powered insights about your personality, career path, relationships, and more. Free first reading.",
+    "Upload a photo of your palm and get instant AI-powered insights about your personality, career path, relationships, and more. Starting at $0.99/month.",
 };
 
 const features = [
@@ -65,21 +65,21 @@ const features = [
 const steps = [
   {
     icon: Upload,
-    title: "Upload Your Palm",
+    title: "Upload Palm & Birth Date",
     description:
-      "Take a clear photo of your palm facing the camera. Our AI validates the image instantly.",
-  },
-  {
-    icon: Cpu,
-    title: "AI Analysis",
-    description:
-      "Advanced GPT-4o Vision analyzes your palm lines, mounts, and hand structure in seconds.",
+      "Take a clear photo of your palm and enter your birth date. Your data is locked forever to your account.",
   },
   {
     icon: Eye,
-    title: "Read Your Results",
+    title: "Confirm & Validate",
     description:
-      "Get a detailed reading covering personality, career, relationships, and more.",
+      "Review your information and confirm. Our AI validates your palm photo for quality.",
+  },
+  {
+    icon: Cpu,
+    title: "Choose Plan & Read",
+    description:
+      "Subscribe to unlock your full reading. Basic starts at just $0.99/month.",
   },
 ];
 
@@ -100,14 +100,14 @@ export default function HomePage() {
             </h1>
             <p className="mt-6 text-lg text-muted-foreground sm:text-xl">
               Upload a photo of your palm and let AI uncover your personality,
-              life path, career strengths, and more. Your first full reading is
-              free for 7 days.
+              life path, career strengths, and more. Your palm reading is locked
+              to your account forever.
             </p>
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link href="/try">
+              <Link href="/palm/upload">
                 <Button size="lg" className="gap-2 text-base">
                   <Hand className="h-5 w-5" />
-                  Try Free — Read My Palm
+                  Read My Palm Now
                 </Button>
               </Link>
               <Link href="/pricing">
@@ -118,7 +118,7 @@ export default function HomePage() {
               </Link>
             </div>
             <p className="mt-4 text-xs text-muted-foreground">
-              No credit card required. Full access for 7 days.
+              Starting at $0.99/month. One palm, one destiny.
             </p>
           </div>
         </div>
@@ -194,12 +194,12 @@ export default function HomePage() {
               Ready to Discover Your Palm&apos;s Secrets?
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Your first reading is completely free. No credit card needed.
+              Your palm and destiny, locked to your account forever. Starting at just $0.99/month.
             </p>
-            <Link href="/try" className="mt-8 inline-block">
+            <Link href="/palm/upload" className="mt-8 inline-block">
               <Button size="lg" className="gap-2 text-base">
                 <Hand className="h-5 w-5" />
-                Try Free — Read My Palm
+                Read My Palm Now
               </Button>
             </Link>
           </div>

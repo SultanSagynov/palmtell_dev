@@ -1,67 +1,48 @@
-import type { AccessTier } from "@/types";
+import type { TempUserWithSubscription, TempSubscription } from "@/types/temp-user";
 
-interface UserForAccess {
-  trialStartedAt: Date | null;
-  trialExpiresAt: Date | null;
-}
+export type AccessTier = "basic" | "pro" | "ultimate" | "expired";
 
-interface SubscriptionForAccess {
-  status: string;
-  plan: string;
-}
-
-export function getAccessTier(
-  user: UserForAccess,
-  subscription: SubscriptionForAccess | null
-): AccessTier {
-  const now = new Date();
-
-  if (subscription?.status === "active") {
+export function getAccessTier(user: TempUserWithSubscription, subscription: TempSubscription | null): AccessTier {
+  // Check if user has an active subscription
+  if (subscription && subscription.status === "active") {
     return subscription.plan as AccessTier;
-  }
-
-  if (user.trialExpiresAt && now < new Date(user.trialExpiresAt)) {
-    return "trial";
   }
 
   return "expired";
 }
 
-export function isSectionAccessible(
-  sectionKey: string,
-  tier: AccessTier
-): boolean {
-  const freeSections = ["personality", "life_path", "career"];
+export function isSectionAccessible(section: string, tier: AccessTier): boolean {
+  const accessMatrix = {
+    personality: ["basic", "pro", "ultimate"],
+    life_path: ["basic", "pro", "ultimate"], 
+    career: ["basic", "pro", "ultimate"],
+    relationships: ["pro", "ultimate"],
+    health: ["pro", "ultimate"],
+    lucky: ["pro", "ultimate"],
+  };
 
-  if (tier === "trial" || tier === "pro" || tier === "ultimate") {
-    return true;
-  }
-
-  // expired: only 3 basic sections
-  return freeSections.includes(sectionKey);
+  return accessMatrix[section as keyof typeof accessMatrix]?.includes(tier) ?? false;
 }
 
 export function getReadingLimit(tier: AccessTier): number {
-  switch (tier) {
-    case "trial":
-      return 1;
-    case "pro":
-      return 10;
-    case "ultimate":
-      return Infinity;
-    case "expired":
-      return 0;
-  }
+  const limits = {
+    basic: 1,
+    pro: 5,
+    ultimate: Infinity,
+    expired: 0,
+  };
+
+  return limits[tier];
 }
 
-export function getProfileLimit(tier: AccessTier): number {
-  switch (tier) {
-    case "trial":
-    case "expired":
-      return 1;
-    case "pro":
-      return 3;
-    case "ultimate":
-      return Infinity;
-  }
+export function canAccessDailyHoroscope(tier: AccessTier): boolean {
+  return ["pro", "ultimate"].includes(tier);
+}
+
+export function canAccessMonthlyHoroscope(tier: AccessTier): boolean {
+  return tier === "ultimate";
+}
+
+export function canExportPDF(tier: AccessTier): boolean {
+  return tier === "ultimate";
 }

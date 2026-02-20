@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAccessTier, getProfileLimit, getReadingLimit } from "@/lib/access";
+import { getAccessTier, getReadingLimit } from "@/lib/access";
+import type { TempUserWithSubscription } from "@/types/temp-user";
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -10,41 +11,25 @@ export async function GET() {
   }
 
   try {
-    let user = await db.user.findUnique({
+    const user = await db.user.findUnique({
       where: { clerkId },
       include: { subscription: true },
-    });
+    }) as TempUserWithSubscription | null;
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Activate trial for new users on first access (if not already activated)
-    if (!user.trialStartedAt && !user.subscription?.id) {
-      const now = new Date();
-      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      
-      user = await db.user.update({
-        where: { id: user.id },
-        data: {
-          trialStartedAt: now,
-          trialExpiresAt: sevenDaysFromNow,
-        },
-        include: { subscription: true },
-      });
-    }
-
     const tier = getAccessTier(user, user.subscription);
-    const profileLimit = getProfileLimit(tier);
     const readingLimit = getReadingLimit(tier);
     
     return NextResponse.json({
       tier,
       accessTier: tier,
-      profileLimit,
       readingLimit,
-      trialStartedAt: user.trialStartedAt?.toISOString(),
-      trialExpiresAt: user.trialExpiresAt?.toISOString(),
+      palmConfirmed: user.palmConfirmed,
+      palmPhotoUrl: user.palmPhotoUrl,
+      dob: user.dob?.toISOString(),
       subscription: user.subscription ? {
         status: user.subscription.status,
         plan: user.subscription.plan,

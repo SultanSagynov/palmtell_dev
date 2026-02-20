@@ -2,52 +2,69 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PalmUpload } from "@/components/palm-upload";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { DISCLAIMER } from "@/lib/constants";
 import Link from "next/link";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Hand } from "lucide-react";
+
+interface UserData {
+  palmConfirmed: boolean;
+  palmPhotoUrl: string | null;
+  subscription?: {
+    plan: string;
+    status: string;
+  };
+}
 
 export default function NewReadingPage() {
-  const [profiles, setProfiles] = useState<any[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
   const router = useRouter();
   const { user } = useUser();
 
   useEffect(() => {
-    async function fetchProfiles() {
+    async function fetchUserData() {
       try {
-        const response = await fetch("/api/profiles");
+        const response = await fetch("/api/user/access");
         const data = await response.json();
-        setProfiles(data.profiles || []);
-        
-        // Select default profile or first profile
-        const defaultProfile = data.profiles?.find((p: any) => p.isDefault) || data.profiles?.[0];
-        if (defaultProfile) {
-          setSelectedProfileId(defaultProfile.id);
-        }
+        setUserData(data);
       } catch (error) {
-        console.error("Failed to fetch profiles:", error);
+        console.error("Failed to fetch user data:", error);
       } finally {
         setIsLoading(false);
       }
     }
 
     if (user) {
-      fetchProfiles();
+      fetchUserData();
     }
   }, [user]);
 
-  const handleUploadSuccess = (readingId: string) => {
-    router.push(`/dashboard/readings/${readingId}`);
-  };
-
-  const handleUploadError = (error: string) => {
-    // TODO: Show toast notification
-    console.error("Upload error:", error);
+  const createReading = async () => {
+    if (!userData?.palmConfirmed) return;
+    
+    setIsCreating(true);
+    try {
+      const response = await fetch("/api/readings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        router.push(`/dashboard/readings/${data.reading.id}`);
+      } else {
+        console.error("Failed to create reading:", data.error);
+      }
+    } catch (error) {
+      console.error("Failed to create reading:", error);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   if (isLoading) {
@@ -61,14 +78,14 @@ export default function NewReadingPage() {
     );
   }
 
-  // Show message if no profiles exist
-  if (profiles.length === 0) {
+  // Show message if palm not confirmed
+  if (!userData?.palmConfirmed) {
     return (
       <div className="mx-auto max-w-2xl space-y-8">
         <div>
           <h1 className="font-serif text-3xl font-bold">New Palm Reading</h1>
           <p className="mt-1 text-muted-foreground">
-            Upload a clear photo of your palm to begin the AI analysis.
+            Your palm must be confirmed before creating readings.
           </p>
         </div>
 
@@ -76,12 +93,12 @@ export default function NewReadingPage() {
           <CardContent className="flex items-start gap-3 pt-6">
             <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-medium text-destructive">No profiles found</p>
+              <p className="font-medium text-destructive">Palm setup required</p>
               <p className="text-sm text-destructive/80 mt-1 mb-4">
-                You need to create a profile before you can upload readings.
+                You need to complete palm setup before you can create readings.
               </p>
-              <Link href="/dashboard/profiles/new">
-                <Button size="sm">Create Profile</Button>
+              <Link href="/palm/upload">
+                <Button size="sm">Setup Palm</Button>
               </Link>
             </div>
           </CardContent>
@@ -99,43 +116,29 @@ export default function NewReadingPage() {
         </p>
       </div>
 
-      {/* Profile Selection */}
-      {profiles.length > 1 && (
-        <Card className="border-border/40">
-          <CardHeader>
-            <CardTitle className="text-base">Reading For</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 flex-wrap">
-              {profiles.map((profile) => (
-                <button
-                  key={profile.id}
-                  onClick={() => setSelectedProfileId(profile.id)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedProfileId === profile.id
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80"
-                  }`}
-                >
-                  {profile.avatarEmoji && (
-                    <span className="mr-1">{profile.avatarEmoji}</span>
-                  )}
-                  {profile.name}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Upload Component */}
-      {selectedProfileId && (
-        <PalmUpload
-          profileId={selectedProfileId}
-          onUploadSuccess={handleUploadSuccess}
-          onUploadError={handleUploadError}
-        />
-      )}
+      {/* Create Reading Button */}
+      <Card className="border-border/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Hand className="h-5 w-5" />
+            Generate New Reading
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Create a new palm reading using your confirmed palm photo and birth date.
+            </p>
+            <Button 
+              onClick={createReading} 
+              disabled={isCreating}
+              className="w-full"
+            >
+              {isCreating ? "Creating Reading..." : "Create Reading"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tips */}
       <Card className="border-border/40">

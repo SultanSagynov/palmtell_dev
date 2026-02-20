@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAccessTier, getReadingLimit } from "@/lib/access";
+import type { TempUserWithSubscription } from "@/types/temp-user";
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,23 +16,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const profileId = req.nextUrl.searchParams.get("profile_id");
-
-    // Validate profile ID if provided
-    if (profileId && profileId.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Invalid profile ID" },
-        { status: 400 }
-      );
-    }
-
+    // Get all readings for this user (no profile filtering in v2)
     const readings = await db.reading.findMany({
       where: {
         userId: user.id,
-        ...(profileId ? { profileId } : {}),
       },
       orderBy: { createdAt: "desc" },
-      include: { profile: { select: { name: true, avatarEmoji: true } } },
     });
 
     return NextResponse.json({ readings });
@@ -54,22 +44,31 @@ export async function POST(req: Request) {
     const user = await db.user.findUnique({
       where: { clerkId },
       include: { subscription: true },
-    });
+    }) as TempUserWithSubscription | null;
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Check if user has confirmed palm data
+    if (!user.palmConfirmed || !user.palmPhotoUrl) {
+      return NextResponse.json(
+        { error: "Palm not confirmed. Please complete palm setup first." },
+        { status: 400 }
+      );
+    }
+
     const tier = getAccessTier(user, user.subscription);
 
-    // Check quota
+    // Check if user has active subscription
     if (tier === "expired") {
       return NextResponse.json(
-        { error: "Trial expired. Please upgrade." },
+        { error: "No active subscription. Please subscribe to create readings." },
         { status: 402 }
       );
     }
 
+    // Check monthly reading quota
     const limit = getReadingLimit(tier);
     if (limit !== Infinity) {
       const startOfMonth = new Date();
@@ -85,150 +84,34 @@ export async function POST(req: Request) {
 
       if (count >= limit) {
         return NextResponse.json(
-          { error: "Reading quota reached for this period." },
+          { 
+            error: "Monthly reading quota exceeded.", 
+            upgradeRequired: true,
+            currentPlan: tier 
+          },
           { status: 429 }
         );
       }
     }
 
-    // Check if this is a JSON request (temp image flow) or FormData (direct upload)
-    const contentType = req.headers.get("content-type");
-    let profileId: string;
-    let image: File | null = null;
-    let tempImageUrl: string | null = null;
-    let tempImageKey: string | null = null;
-
-    if (contentType?.includes("application/json")) {
-      // Handle temp image flow from Session 5 onboarding
-      const body = await req.json();
-      profileId = body.profileId;
-      tempImageUrl = body.tempImageUrl;
-      tempImageKey = body.tempImageKey;
-
-      if (!profileId || profileId.trim().length === 0) {
-        return NextResponse.json(
-          { error: "Profile ID is required" },
-          { status: 400 }
-        );
-      }
-
-      if (!tempImageUrl || !tempImageKey) {
-        return NextResponse.json(
-          { error: "Temporary image data is required" },
-          { status: 400 }
-        );
-      }
-    } else {
-      // Handle direct upload flow
-      const formData = await req.formData();
-      profileId = formData.get("profileId") as string;
-      image = formData.get("image") as File;
-
-      if (!profileId || profileId.trim().length === 0) {
-        return NextResponse.json(
-          { error: "Profile ID is required" },
-          { status: 400 }
-        );
-      }
-
-      if (!image) {
-        return NextResponse.json(
-          { error: "Image is required" },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Validate image file (only for direct upload)
-    if (image) {
-      const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic"];
-      if (!allowedTypes.includes(image.type)) {
-        return NextResponse.json(
-          { error: "Invalid image type. Please upload JPG, PNG, WEBP, or HEIC." },
-          { status: 400 }
-        );
-      }
-
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (image.size > maxSize) {
-        return NextResponse.json(
-          { error: "Image too large. Please upload an image under 10MB." },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Verify profile belongs to user
-    const profile = await db.profile.findFirst({
-      where: { id: profileId, userId: user.id },
-    });
-
-    if (!profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-    }
-
-    // Start trial if first reading
-    if (!user.trialStartedAt) {
-      await db.user.update({
-        where: { id: user.id },
-        data: {
-          trialStartedAt: new Date(),
-          trialExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
-      });
-    }
-
-    // Create reading in pending state
+    // Create reading using user's confirmed palm photo
+    // @ts-ignore - Temporary ignore during schema migration
     const reading = await db.reading.create({
       data: {
         userId: user.id,
-        profileId,
-        status: "pending",
+        imageUrl: user.palmPhotoUrl, // Use user's confirmed palm photo
       },
-    });
-
-    // Handle image upload or use temp image
-    let imageUrl: string;
-    
-    if (tempImageUrl) {
-      // Use existing temp image
-      imageUrl = tempImageUrl;
-      
-      // Move temp image to permanent location
-      const { uploadToR2, generateImageKey } = await import("@/lib/r2");
-      const imageKey = generateImageKey(user.id, reading.id);
-      
-      // Copy from temp location to permanent location
-      // For now, we'll use the temp URL as-is and clean up later
-      imageUrl = tempImageUrl;
-    } else if (image) {
-      // Upload new image to R2
-      const { uploadToR2, generateImageKey } = await import("@/lib/r2");
-      const buffer = Buffer.from(await image.arrayBuffer());
-      const imageKey = generateImageKey(user.id, reading.id);
-      imageUrl = await uploadToR2(buffer, imageKey, image.type);
-    } else {
-      return NextResponse.json(
-        { error: "No image provided" },
-        { status: 400 }
-      );
-    }
-
-    // Update reading with image URL
-    await db.reading.update({
-      where: { id: reading.id },
-      data: { imageUrl },
     });
 
     // Enqueue AI analysis job
     const { enqueueAnalysisJob } = await import("@/lib/queue");
     await enqueueAnalysisJob({
       readingId: reading.id,
-      imageUrl,
+      imageUrl: user.palmPhotoUrl!,
       userId: user.id,
     });
 
-    return NextResponse.json({ reading: { ...reading, imageUrl } }, { status: 201 });
+    return NextResponse.json({ reading }, { status: 201 });
   } catch (error) {
     console.error("[READINGS_POST_ERROR]", error);
     

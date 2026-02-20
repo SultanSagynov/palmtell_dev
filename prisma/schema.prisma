@@ -8,47 +8,34 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(uuid()) @db.Uuid
+  id              String    @id @default(cuid())
   clerkId         String    @unique @map("clerk_id")
   email           String    @unique
   name            String?
-  trialStartedAt  DateTime? @map("trial_started_at") @db.Timestamptz
-  trialExpiresAt  DateTime? @map("trial_expires_at") @db.Timestamptz
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  palmPhotoUrl    String?   @map("palm_photo_url")
+  dob             DateTime?
+  palmConfirmed   Boolean   @default(false) @map("palm_confirmed")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
-  profiles     Profile[]
-  readings     Reading[]
+  // Relations
   subscription Subscription?
+  readings     Reading[]
+  horoscopes   Horoscope[]
 
   @@map("users")
 }
 
-model Profile {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  name        String
-  dob         DateTime? @db.Date
-  isDefault   Boolean   @default(false) @map("is_default")
-  avatarEmoji String?   @map("avatar_emoji")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  readings   Reading[]
-  horoscopes Horoscope[]
-
-  @@map("profiles")
-}
-
 model Subscription {
-  id                   String   @id @default(uuid()) @db.Uuid
-  userId               String   @unique @map("user_id") @db.Uuid
+  id                   String   @id @default(cuid())
+  userId               String   @unique @map("user_id")
   lsCustomerId         String?  @map("ls_customer_id")
   lsSubscriptionId     String?  @map("ls_subscription_id")
-  plan                 String   // 'pro' | 'ultimate'
+  lsVariantId          String?  @map("ls_variant_id")
+  plan                 String   // 'basic' | 'pro' | 'ultimate'
   status               String   // 'active' | 'past_due' | 'canceled' | 'expired'
-  currentPeriodEnd     DateTime? @map("current_period_end") @db.Timestamptz
-  cancelsAt            DateTime? @map("cancels_at") @db.Timestamptz
-  pendingPlan          String?  @map("pending_plan") // for plan change workflows
+  renewsAt             DateTime? @map("renews_at") @db.Timestamptz
+  endsAt               DateTime? @map("ends_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -56,31 +43,27 @@ model Subscription {
 }
 
 model Reading {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  profileId    String   @map("profile_id") @db.Uuid
-  imageUrl     String?  @map("image_url")
-  status       String   @default("pending") // 'pending' | 'processing' | 'completed' | 'failed'
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  imageUrl     String   @map("image_url")
   analysisJson Json?    @map("analysis_json")
-  error        String?  // error message if analysis failed
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("readings")
 }
 
 model Horoscope {
-  id          String   @id @default(uuid()) @db.Uuid
-  profileId   String   @map("profile_id") @db.Uuid
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
   date        DateTime @db.Date
   sign        String
   contentJson Json?    @map("content_json")
   generatedAt DateTime @default(now()) @map("generated_at") @db.Timestamptz
 
-  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([profileId, date])
+  @@unique([userId, date])
   @@map("horoscopes")
 }
