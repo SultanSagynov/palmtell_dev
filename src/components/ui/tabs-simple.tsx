@@ -21,6 +21,7 @@ interface TabsTriggerProps {
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  onClick?: () => void;
 }
 
 interface TabsContentProps {
@@ -75,11 +76,18 @@ const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
 TabsList.displayName = "TabsList";
 
 const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
-  ({ className, value, children, disabled, ...props }, ref) => {
+  ({ className, value, children, disabled, onClick, ...props }, ref) => {
     const context = React.useContext(TabsContext);
     if (!context) throw new Error("TabsTrigger must be used within Tabs");
     
     const isActive = context.value === value;
+    
+    const handleClick = () => {
+      context.onValueChange(value);
+      if (onClick) {
+        onClick();
+      }
+    };
     
     return (
       <button
@@ -93,7 +101,7 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
             : "hover:bg-muted/80",
           className
         )}
-        onClick={() => context.onValueChange(value)}
+        onClick={handleClick}
         {...props}
       >
         {children}
