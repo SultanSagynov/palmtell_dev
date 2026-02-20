@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAccessTier, getProfileLimit, getReadingLimit } from "@/lib/access";
+import { getAccessTier, getReadingLimit } from "@/lib/access";
+import type { TempUserWithSubscription } from "@/types/temp-user";
 
 /**
  * DEBUG endpoint for subscription status
@@ -17,7 +18,7 @@ export async function GET() {
     const user = await db.user.findUnique({
       where: { clerkId },
       include: { subscription: true },
-    });
+    }) as TempUserWithSubscription | null;
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -31,17 +32,18 @@ export async function GET() {
       email: user.email,
       createdAt: user.createdAt,
       tier,
-      profileLimit: getProfileLimit(tier),
       readingLimit: getReadingLimit(tier),
-      trialStartedAt: user.trialStartedAt,
-      trialExpiresAt: user.trialExpiresAt,
+      palmConfirmed: user.palmConfirmed || false,
+      palmPhotoUrl: user.palmPhotoUrl || null,
+      dob: user.dob?.toISOString() || null,
       subscription: user.subscription ? {
         id: user.subscription.id,
         plan: user.subscription.plan,
         status: user.subscription.status,
+        lsCustomerId: user.subscription.lsCustomerId,
         lsSubscriptionId: user.subscription.lsSubscriptionId,
-        currentPeriodEnd: user.subscription.currentPeriodEnd,
-        cancelsAt: user.subscription.cancelsAt,
+        renewsAt: user.subscription.renewsAt?.toISOString(),
+        endsAt: user.subscription.endsAt?.toISOString(),
       } : null,
     });
   } catch (error) {

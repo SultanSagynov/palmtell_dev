@@ -36,8 +36,7 @@ const SECTION_ICONS = {
 };
 
 interface AccessTier {
-  tier: "trial" | "expired" | "pro" | "ultimate";
-  trialExpiresAt?: string;
+  tier: "basic" | "pro" | "ultimate";
 }
 
 export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDisplayProps) {
@@ -50,11 +49,14 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
       try {
         const response = await fetch("/api/user/access");
         const data = await response.json();
-        setAccessTier(data);
+        
+        if (response.ok) {
+          setAccessTier({ 
+            tier: data.tier || "basic"
+          });
+        }
       } catch (error) {
         console.error("Failed to fetch access tier:", error);
-        // Default to expired if we can't fetch
-        setAccessTier({ tier: "expired" });
       } finally {
         setIsLoading(false);
       }
@@ -65,24 +67,22 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
     }
   }, [user]);
 
-  const isSectionAccessible = (sectionKey: string) => {
-    if (!accessTier) return false;
+  const getVisibleSections = () => {
+    if (!accessTier) return [];
     
-    const section = READING_SECTIONS.find(s => s.key === sectionKey);
-    if (!section) return false;
-
-    switch (accessTier.tier) {
-      case "trial":
-        return true; // All sections accessible during trial
-      case "expired":
-        return section.freeAccess; // Only free sections after trial
-      case "pro":
-        return section.proAccess;
-      case "ultimate":
-        return section.ultimateAccess;
-      default:
-        return false;
+    if (accessTier.tier === "basic") {
+      return ["personality", "life_path", "career"];
+    } else if (accessTier.tier === "pro") {
+      return ["personality", "life_path", "career", "relationships", "health"];
+    } else if (accessTier.tier === "ultimate") {
+      return ["personality", "life_path", "career", "relationships", "health", "lucky"];
     }
+    
+    return [];
+  };
+
+  const isSectionAccessible = (sectionKey: string) => {
+    return getVisibleSections().includes(sectionKey);
   };
 
   const renderUpgradeOverlay = (sectionKey: string) => {
@@ -283,8 +283,8 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
         {renderSection('lucky', 'Lucky Numbers', analysis.lucky, 5)}
       </div>
 
-      {/* Trial expiry warning */}
-      {accessTier?.tier === "trial" && accessTier.trialExpiresAt && (
+      {/* Upgrade prompt for basic users */}
+      {accessTier?.tier === "basic" && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -295,9 +295,9 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
               <div className="flex items-center gap-3">
                 <Crown className="h-5 w-5 text-accent" />
                 <div className="flex-1">
-                  <p className="font-medium text-sm">Trial expires soon</p>
+                  <p className="font-medium text-sm">Unlock more insights</p>
                   <p className="text-xs text-muted-foreground">
-                    Upgrade to Pro to keep full access to all sections
+                    Upgrade to Pro for relationships, health insights and more
                   </p>
                 </div>
                 <Button size="sm" className="gap-2">
