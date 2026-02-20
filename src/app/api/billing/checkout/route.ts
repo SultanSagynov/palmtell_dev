@@ -12,13 +12,44 @@ export async function POST(req: Request) {
   const body = await req.json();
   const { plan, interval } = body as { plan: 'pro' | 'ultimate', interval: 'month' | 'year' };
 
-  const user = await db.user.findUnique({
+  let user = await db.user.findUnique({
     where: { clerkId },
     include: { subscription: true },
   });
 
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    // User not in DB — Clerk webhook may have failed; create user now
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const clerkUser = await (await clerkClient()).users.getUser(clerkId);
+      const email = clerkUser.emailAddresses[0]?.emailAddress;
+
+      if (!email) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      const name = [clerkUser.firstName, clerkUser.lastName]
+        .filter(Boolean)
+        .join(" ") || null;
+
+      user = await db.user.create({
+        data: {
+          clerkId,
+          email,
+          name,
+          profiles: {
+            create: {
+              name: "Me",
+              isDefault: true,
+            },
+          },
+        },
+        include: { subscription: true },
+      });
+    } catch (createError) {
+      console.error("Failed to auto-create user for checkout:", createError);
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
   }
 
   try {

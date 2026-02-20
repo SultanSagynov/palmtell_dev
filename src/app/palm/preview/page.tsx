@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Hand, Star, Lock, CreditCard, Check } from "lucide-react";
+import { Hand, Star, Lock, CreditCard, Check, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { PLANS } from "@/lib/constants";
 
@@ -16,12 +16,12 @@ export default function PalmPreviewPage() {
     career?: string;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
   const router = useRouter();
 
   useEffect(() => {
-    // In real implementation, this would show a preview of the analysis
-    // For now, we'll show mock preview data
+    // Show a preview of what the full reading contains
     setTimeout(() => {
       setPreviewData({
         personality: "You possess a natural charisma and leadership qualities that draw others to you. Your palm reveals a strong sense of independence and creativity...",
@@ -32,10 +32,38 @@ export default function PalmPreviewPage() {
     }, 2000);
   }, []);
 
-  const handleSubscribe = (plan: string) => {
-    // In real implementation, this would redirect to Lemon Squeezy checkout
-    // For now, we'll simulate the flow
-    router.push(`/pricing?plan=${plan}&palm_confirmed=true`);
+  const handleSubscribe = async (plan: "pro" | "ultimate") => {
+    setLoadingPlan(plan);
+    try {
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, interval: "month" }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.requiresCancellation) {
+          alert(
+            `You already have an active ${data.currentPlan} plan. Please cancel it from billing settings before switching.`
+          );
+          router.push("/dashboard/billing");
+          return;
+        }
+        throw new Error(data.error || "Failed to create checkout");
+      }
+
+      const checkoutUrl = data.checkoutUrl || data.url;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      alert("Failed to start checkout. Please try again.");
+    } finally {
+      setLoadingPlan(null);
+    }
   };
 
   if (isLoading) {
@@ -54,9 +82,9 @@ export default function PalmPreviewPage() {
                 </p>
               </div>
             </div>
-            
+
             <div className="space-y-4">
-              {["Analyzing palm lines...", "Interpreting life path...", "Generating insights..."].map((step, index) => (
+              {["Analyzing palm lines...", "Interpreting life path...", "Generating insights..."].map((step) => (
                 <div key={step} className="flex items-center gap-3 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg">
                   <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
                     <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
@@ -83,7 +111,7 @@ export default function PalmPreviewPage() {
             <div>
               <h1 className="font-serif text-3xl font-bold">Your Reading is Ready!</h1>
               <p className="text-muted-foreground mt-2">
-                Here's a preview of your personalized palm reading
+                Here&apos;s a preview of your personalized palm reading
               </p>
             </div>
           </div>
@@ -121,9 +149,7 @@ export default function PalmPreviewPage() {
               </CardHeader>
               <CardContent className="relative">
                 <div className="blur-sm">
-                  <p className="text-sm leading-relaxed">
-                    {previewData?.lifePath}
-                  </p>
+                  <p className="text-sm leading-relaxed">{previewData?.lifePath}</p>
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-center justify-center">
                   <div className="text-center space-y-2">
@@ -147,9 +173,7 @@ export default function PalmPreviewPage() {
               </CardHeader>
               <CardContent className="relative">
                 <div className="blur-sm">
-                  <p className="text-sm leading-relaxed">
-                    {previewData?.career}
-                  </p>
+                  <p className="text-sm leading-relaxed">{previewData?.career}</p>
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-center justify-center">
                   <div className="text-center space-y-2">
@@ -164,39 +188,13 @@ export default function PalmPreviewPage() {
           {/* Pricing Options */}
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-center">Choose Your Plan</CardTitle>
+              <CardTitle className="text-center">Unlock Your Full Reading</CardTitle>
+              <p className="text-center text-sm text-muted-foreground mt-1">
+                ✨ Your palm is confirmed — subscribe now for instant access
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4">
-                {/* Basic Plan */}
-                <div className="border rounded-lg p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold">{PLANS.basic.name}</h3>
-                      <p className="text-sm text-muted-foreground">Perfect for getting started</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold">${PLANS.basic.price}</div>
-                      <div className="text-sm text-muted-foreground">/month</div>
-                    </div>
-                  </div>
-                  <ul className="text-sm space-y-1">
-                    {PLANS.basic.features.map((feature, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <Check className="h-3 w-3 text-green-500" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button 
-                    onClick={() => handleSubscribe('basic')}
-                    variant="outline" 
-                    className="w-full"
-                  >
-                    Start with Basic
-                  </Button>
-                </div>
-
                 {/* Pro Plan - Recommended */}
                 <div className="border-2 border-primary rounded-lg p-4 space-y-3 relative">
                   <Badge className="absolute -top-2 left-4 bg-primary">Recommended</Badge>
@@ -218,11 +216,19 @@ export default function PalmPreviewPage() {
                       </li>
                     ))}
                   </ul>
-                  <Button 
-                    onClick={() => handleSubscribe('pro')}
+                  <Button
+                    onClick={() => handleSubscribe("pro")}
                     className="w-full"
+                    disabled={loadingPlan !== null}
                   >
-                    Choose Pro
+                    {loadingPlan === "pro" ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      "Choose Pro"
+                    )}
                   </Button>
                 </div>
 
@@ -246,19 +252,22 @@ export default function PalmPreviewPage() {
                       </li>
                     ))}
                   </ul>
-                  <Button 
-                    onClick={() => handleSubscribe('ultimate')}
-                    variant="outline" 
+                  <Button
+                    onClick={() => handleSubscribe("ultimate")}
+                    variant="outline"
                     className="w-full"
+                    disabled={loadingPlan !== null}
                   >
-                    Go Ultimate
+                    {loadingPlan === "ultimate" ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      "Go Ultimate"
+                    )}
                   </Button>
                 </div>
-              </div>
-
-              <div className="text-center text-sm text-muted-foreground">
-                <p>✨ Your palm and birth date are already confirmed</p>
-                <p>After subscription, you'll get instant access to your full reading</p>
               </div>
             </CardContent>
           </Card>

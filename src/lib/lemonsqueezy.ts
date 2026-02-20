@@ -51,7 +51,7 @@ export async function createLemonSqueezyCheckout(data: CheckoutData) {
       },
     },
     productOptions: {
-      redirectUrl: `${process.env.NEXT_PUBLIC_URL}/dashboard?success=true`,
+      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || 'https://palmtell.com'}/dashboard?success=true`,
     },
   });
 
@@ -93,14 +93,16 @@ export function getCustomerPortalUrl(): string {
   return 'https://app.lemonsqueezy.com/my-orders';
 }
 
-export function getPlanFromVariantId(variantId: string): string | null {
+export function getPlanFromVariantId(variantId: string | number): string | null {
   if (!variantId) {
     console.warn("getPlanFromVariantId called with empty variantId");
     return null;
   }
-  const plan = VARIANT_TO_PLAN[variantId];
+  // Lemon Squeezy webhooks may send variant_id as a number; normalise to string
+  const key = String(variantId);
+  const plan = VARIANT_TO_PLAN[key];
   if (!plan) {
-    console.warn(`Unknown variant ID: ${variantId}. Available variants:`, Object.keys(VARIANT_TO_PLAN));
+    console.warn(`Unknown variant ID: ${key}. Available variants:`, Object.keys(VARIANT_TO_PLAN));
   }
   return plan || null;
 }

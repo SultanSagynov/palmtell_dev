@@ -16,18 +16,52 @@ export async function GET() {
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      // User not in DB — try to auto-create from Clerk (webhook may have failed)
+      try {
+        const { clerkClient } = await import("@clerk/nextjs/server");
+        const clerkUser = await (await clerkClient()).users.getUser(clerkId);
+        const email = clerkUser.emailAddresses[0]?.emailAddress;
+        if (!email) {
+          return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+        const name = [clerkUser.firstName, clerkUser.lastName]
+          .filter(Boolean)
+          .join(" ") || null;
+        const newUser = await db.user.create({
+          data: {
+            clerkId,
+            email,
+            name,
+            profiles: { create: { name: "Me", isDefault: true } },
+          },
+          include: { subscription: true },
+        });
+        const tier = getAccessTier(newUser, newUser.subscription);
+        return NextResponse.json({
+          tier,
+          accessTier: tier,
+          profileLimit: getProfileLimit(tier),
+          readingLimit: getReadingLimit(tier),
+          palmConfirmed: newUser.palmConfirmed,
+          dob: null,
+          subscription: null,
+        });
+      } catch {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
     }
 
     const tier = getAccessTier(user, user.subscription);
     const profileLimit = getProfileLimit(tier);
     const readingLimit = getReadingLimit(tier);
-    
+
     return NextResponse.json({
       tier,
       accessTier: tier,
       profileLimit,
       readingLimit,
+      palmConfirmed: user.palmConfirmed,
+      dob: user.dob ? user.dob.toISOString() : null,
       subscription: user.subscription ? {
         status: user.subscription.status,
         plan: user.subscription.plan,
