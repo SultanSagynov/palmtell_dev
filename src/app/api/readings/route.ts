@@ -72,6 +72,8 @@ export async function POST(req: Request) {
 
     const limit = getReadingLimit(tier);
     if (limit !== Infinity) {
+      // Basic plan is a one-time purchase — check all-time total, not monthly
+      const isBasicPlan = tier === 'basic';
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
@@ -79,15 +81,15 @@ export async function POST(req: Request) {
       const count = await db.reading.count({
         where: {
           userId: user.id,
-          createdAt: { gte: startOfMonth },
+          ...(isBasicPlan ? {} : { createdAt: { gte: startOfMonth } }),
         },
       });
 
       if (count >= limit) {
-        return NextResponse.json(
-          { error: "Reading quota reached for this period." },
-          { status: 429 }
-        );
+        const message = isBasicPlan
+          ? "Your one-time reading has already been used. Upgrade to Pro or Ultimate for more readings."
+          : "Reading quota reached for this period.";
+        return NextResponse.json({ error: message }, { status: 429 });
       }
     }
 

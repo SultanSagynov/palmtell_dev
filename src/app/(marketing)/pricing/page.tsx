@@ -14,13 +14,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Loader2 } from "lucide-react";
+import { Check, X, Loader2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PLANS } from "@/lib/constants";
 
 type BillingInterval = "monthly" | "annual";
 
-const tiers = [
+const subscriptionTiers = [
   {
     key: "pro" as const,
     name: PLANS.pro.name,
@@ -64,7 +64,10 @@ export default function PricingPage() {
   const { isSignedIn } = useUser();
   const router = useRouter();
 
-  const handlePlanSelect = async (plan: "pro" | "ultimate") => {
+  const handlePlanSelect = async (
+    plan: "basic" | "pro" | "ultimate",
+    isOnetime = false
+  ) => {
     if (!isSignedIn) {
       router.push(`/sign-up?redirect_url=/pricing`);
       return;
@@ -77,13 +80,18 @@ export default function PricingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
-          interval: interval === "monthly" ? "month" : "year",
+          interval: isOnetime ? "onetime" : interval === "monthly" ? "month" : "year",
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.alreadyOwned) {
+          alert(data.error);
+          router.push("/dashboard");
+          return;
+        }
         if (data.requiresCancellation) {
           alert(
             `You already have an active ${data.currentPlan} plan. Please cancel it from billing settings before switching plans.`
@@ -91,7 +99,6 @@ export default function PricingPage() {
           router.push("/dashboard/billing");
           return;
         }
-        // User not found in DB — send them to upload flow first
         if (response.status === 404) {
           router.push("/palm/upload");
           return;
@@ -119,12 +126,77 @@ export default function PricingPage() {
             Simple, Transparent Pricing
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            One palm, one destiny. Choose your plan and lock in your reading forever.
+            Start with a single reading or unlock the full experience with a subscription.
           </p>
         </div>
 
+        {/* One-time Basic reading */}
+        <div className="mt-12 mx-auto max-w-sm">
+          <Card className="border-border/60 bg-muted/20 relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+              <Badge variant="secondary" className="gap-1">
+                <Zap className="h-3 w-3" />
+                One-Time Purchase
+              </Badge>
+            </div>
+            <CardHeader className="text-center">
+              <CardTitle className="font-serif text-2xl">
+                {PLANS.basic.name} Reading
+              </CardTitle>
+              <CardDescription>
+                Dip your toe in — perfect for your first reading.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center mb-6">
+                <span className="text-4xl font-bold">${PLANS.basic.price}</span>
+                <span className="text-muted-foreground ml-1">one time</span>
+              </div>
+              <ul className="space-y-3">
+                {[
+                  "1 palm reading (never expires)",
+                  "Personality analysis",
+                  "Life Path reading",
+                  "Career insights",
+                ].map((feat) => (
+                  <li key={feat} className="flex items-start gap-2 text-sm">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <span>{feat}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+            <CardFooter>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => handlePlanSelect("basic", true)}
+                disabled={loadingPlan !== null}
+              >
+                {loadingPlan === "basic" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Get One Reading"
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+
+        {/* Divider */}
+        <div className="mt-12 flex items-center gap-4 max-w-3xl mx-auto">
+          <div className="flex-1 border-t border-border/40" />
+          <span className="text-sm text-muted-foreground px-2">
+            or subscribe for more
+          </span>
+          <div className="flex-1 border-t border-border/40" />
+        </div>
+
         {/* Billing toggle */}
-        <div className="mt-10 flex items-center justify-center gap-3">
+        <div className="mt-8 flex items-center justify-center gap-3">
           <button
             onClick={() => setInterval("monthly")}
             className={cn(
@@ -152,9 +224,9 @@ export default function PricingPage() {
           </button>
         </div>
 
-        {/* Cards */}
-        <div className="mt-12 grid gap-6 lg:grid-cols-2 max-w-3xl mx-auto">
-          {tiers.map((tier) => {
+        {/* Subscription cards */}
+        <div className="mt-8 grid gap-6 lg:grid-cols-2 max-w-3xl mx-auto">
+          {subscriptionTiers.map((tier) => {
             const price =
               interval === "monthly" ? tier.monthlyPrice : tier.annualPrice;
             const period = interval === "monthly" ? "/mo" : "/yr";
