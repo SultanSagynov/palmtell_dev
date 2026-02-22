@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { plan, interval } = body as { plan: 'pro' | 'ultimate', interval: 'month' | 'year' };
+  const { plan, interval } = body as { plan: 'basic' | 'pro' | 'ultimate', interval: 'month' | 'year' | 'onetime' };
 
   let user = await db.user.findUnique({
     where: { clerkId },
@@ -53,18 +53,22 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Block re-purchase of basic if already bought
+    if (plan === 'basic' && user.subscription?.plan === 'basic' && user.subscription.status === 'active') {
+      return NextResponse.json({
+        error: "You already have the Basic reading. Upgrade to Pro or Ultimate for more features.",
+        alreadyOwned: true,
+      }, { status: 409 });
+    }
+
     // Handle existing subscription - Lemon Squeezy requires manual cancellation for plan changes
-    if (user.subscription?.lsSubscriptionId && user.subscription.status === 'active') {
-      // For plan changes, we'll need to cancel the current subscription first
-      // This will be handled in the UI with proper messaging
+    if (user.subscription?.lsSubscriptionId && user.subscription.status === 'active' && plan !== 'basic') {
       const planHierarchy = { pro: 1, ultimate: 2 };
       const currentTier = planHierarchy[user.subscription.plan as keyof typeof planHierarchy] || 0;
       const newTier = planHierarchy[plan as keyof typeof planHierarchy] || 0;
-      
+
       if (currentTier !== newTier) {
-        // For plan changes, user needs to cancel current subscription first
-        // We don't need to store pending plan - just return the error
-        return NextResponse.json({ 
+        return NextResponse.json({
           error: "Plan change requires canceling current subscription first",
           requiresCancellation: true,
           currentPlan: user.subscription.plan,

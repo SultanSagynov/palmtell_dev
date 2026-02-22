@@ -158,6 +158,38 @@ export async function POST(req: Request) {
         break;
       }
 
+      // One-time purchase for the Basic plan
+      case "order_created": {
+        const order = event.data;
+        // Only process paid orders
+        if (order.attributes.status !== 'paid') break;
+
+        const variantId = order.attributes.first_order_item?.variant_id;
+        const plan = variantId ? getPlanFromVariantId(variantId) : null;
+
+        if (plan !== 'basic') {
+          console.log("order_created for non-basic variant, skipping:", variantId);
+          break;
+        }
+
+        // Grant permanent basic access (no subscription renewal — one-time purchase)
+        await db.subscription.upsert({
+          where: { userId },
+          create: {
+            userId,
+            lsCustomerId: order.attributes.customer_id?.toString(),
+            plan: 'basic',
+            status: 'active',
+          },
+          update: {
+            lsCustomerId: order.attributes.customer_id?.toString(),
+            plan: 'basic',
+            status: 'active',
+          },
+        });
+        break;
+      }
+
       default:
         console.log("Unhandled webhook event:", eventName);
     }

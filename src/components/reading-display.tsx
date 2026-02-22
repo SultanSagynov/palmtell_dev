@@ -7,18 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PalmAnalysis, READING_SECTIONS } from "@/types";
 import { useUser } from "@clerk/nextjs";
-import { 
-  User, 
-  Compass, 
-  Briefcase, 
-  Heart, 
-  Activity, 
-  Star, 
+import {
+  User,
+  Compass,
+  Briefcase,
+  Heart,
+  Activity,
+  Star,
   Lock,
-  Crown
+  Crown,
 } from "lucide-react";
 import { DISCLAIMER } from "@/lib/constants";
 import Image from "next/image";
+import Link from "next/link";
 
 interface ReadingDisplayProps {
   analysis: PalmAnalysis;
@@ -36,7 +37,15 @@ const SECTION_ICONS = {
 };
 
 interface AccessTier {
-  tier: "basic" | "pro" | "ultimate";
+  tier: "trial" | "basic" | "pro" | "ultimate" | "expired";
+}
+
+// Returns a short teaser snippet of the text
+function teaser(text: string, len = 130): string {
+  if (!text) return "";
+  if (text.length <= len) return text;
+  const trimmed = text.slice(0, len);
+  return trimmed.slice(0, trimmed.lastIndexOf(" ")) + "…";
 }
 
 export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDisplayProps) {
@@ -49,11 +58,8 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
       try {
         const response = await fetch("/api/user/access");
         const data = await response.json();
-        
         if (response.ok) {
-          setAccessTier({ 
-            tier: data.tier || "basic"
-          });
+          setAccessTier({ tier: data.tier || "basic" });
         }
       } catch (error) {
         console.error("Failed to fetch access tier:", error);
@@ -61,59 +67,180 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
         setIsLoading(false);
       }
     }
-
-    if (user) {
-      fetchAccessTier();
-    }
+    if (user) fetchAccessTier();
   }, [user]);
 
   const getVisibleSections = () => {
     if (!accessTier) return [];
-    
-    if (accessTier.tier === "basic") {
+    if (accessTier.tier === "basic" || accessTier.tier === "trial") {
       return ["personality", "life_path", "career"];
-    } else if (accessTier.tier === "pro") {
+    }
+    if (accessTier.tier === "pro") {
       return ["personality", "life_path", "career", "relationships", "health"];
-    } else if (accessTier.tier === "ultimate") {
+    }
+    if (accessTier.tier === "ultimate") {
       return ["personality", "life_path", "career", "relationships", "health", "lucky"];
     }
-    
     return [];
   };
 
-  const isSectionAccessible = (sectionKey: string) => {
-    return getVisibleSections().includes(sectionKey);
-  };
+  const isSectionAccessible = (sectionKey: string) =>
+    getVisibleSections().includes(sectionKey);
 
   const renderUpgradeOverlay = (sectionKey: string) => {
-    const section = READING_SECTIONS.find(s => s.key === sectionKey);
+    const section = READING_SECTIONS.find((s) => s.key === sectionKey);
     if (!section) return null;
 
     const requiredTier = section.proAccess ? "pro" : "ultimate";
     const tierName = requiredTier === "pro" ? "Pro" : "Ultimate";
-    const price = requiredTier === "pro" ? "$9.99/mo" : "$19.99/mo";
+    const price = requiredTier === "pro" ? "$4.99/mo" : "$8.99/mo";
 
     return (
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
-        <div className="text-center p-6">
-          <Lock className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-          <h4 className="font-semibold mb-2">Upgrade to {tierName}</h4>
+      // Gradient that fades from transparent (top) to opaque (bottom)
+      // so the teaser text shows through, and the CTA anchors at the bottom
+      <div className="absolute inset-0 flex items-end justify-center rounded-lg pb-6 bg-gradient-to-t from-background via-background/70 to-transparent">
+        <div className="text-center px-6">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 mb-3">
+            <Lock className="h-5 w-5 text-primary" />
+          </div>
+          <h4 className="font-semibold mb-1">Unlock with {tierName}</h4>
           <p className="text-sm text-muted-foreground mb-4">
-            Unlock this section and more for {price}
+            From {price} — includes this section and more
           </p>
-          <Button size="sm" className="gap-2">
-            <Crown className="h-4 w-4" />
-            Upgrade Now
-          </Button>
+          <Link href="/pricing">
+            <Button size="sm" className="gap-2">
+              <Crown className="h-4 w-4" />
+              Upgrade Now
+            </Button>
+          </Link>
         </div>
       </div>
     );
   };
 
+  const renderSectionContent = (sectionKey: string, content: any, isAccessible: boolean) => {
+    if (sectionKey === "personality") {
+      return (
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed">
+            {isAccessible ? content.summary : teaser(content.summary)}
+          </p>
+          <div className={!isAccessible ? "blur-sm select-none pointer-events-none" : "flex flex-wrap gap-2"}>
+            {isAccessible
+              ? content.traits.map((trait: string, i: number) => (
+                  <Badge key={i} variant="secondary">{trait}</Badge>
+                ))
+              : (content.traits ?? []).map((trait: string, i: number) => (
+                  <Badge key={i} variant="secondary">{trait}</Badge>
+                ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (sectionKey === "life_path") {
+      return (
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed">
+            {isAccessible ? content.summary : teaser(content.summary)}
+          </p>
+          <div className={`grid gap-3 ${!isAccessible ? "blur-sm select-none pointer-events-none" : ""}`}>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <h5 className="font-medium text-sm mb-1">Life Line</h5>
+              <p className="text-xs text-muted-foreground">{content.lines?.life}</p>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <h5 className="font-medium text-sm mb-1">Head Line</h5>
+              <p className="text-xs text-muted-foreground">{content.lines?.head}</p>
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <h5 className="font-medium text-sm mb-1">Heart Line</h5>
+              <p className="text-xs text-muted-foreground">{content.lines?.heart}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (sectionKey === "career") {
+      return (
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed">
+            {isAccessible ? content.summary : teaser(content.summary)}
+          </p>
+          <div className={!isAccessible ? "blur-sm select-none pointer-events-none" : ""}>
+            <h5 className="font-medium text-sm mb-2">Recommended Fields</h5>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(content.fields ?? []).map((field: string, i: number) => (
+                <Badge key={i} variant="outline">{field}</Badge>
+              ))}
+            </div>
+            <h5 className="font-medium text-sm mb-2">Key Strengths</h5>
+            <div className="flex flex-wrap gap-2">
+              {(content.strengths ?? []).map((strength: string, i: number) => (
+                <Badge key={i} variant="secondary">{strength}</Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (sectionKey === "relationships") {
+      return (
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed">
+            {isAccessible ? content.summary : teaser(content.summary)}
+          </p>
+        </div>
+      );
+    }
+
+    if (sectionKey === "health") {
+      return (
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed">
+            {isAccessible ? content.summary : teaser(content.summary)}
+          </p>
+        </div>
+      );
+    }
+
+    if (sectionKey === "lucky") {
+      return (
+        <div className="space-y-4">
+          <div
+            className={`text-center p-6 bg-gradient-to-br from-primary/10 to-accent/10 rounded-lg ${
+              !isAccessible ? "blur-sm select-none pointer-events-none" : ""
+            }`}
+          >
+            <Star className="h-8 w-8 mx-auto mb-3 text-primary" />
+            <h5 className="font-medium mb-2">Your Lucky Numbers</h5>
+            <div className="flex justify-center gap-2 mb-3">
+              {(content.numbers ?? []).map((num: number, i: number) => (
+                <div
+                  key={i}
+                  className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold"
+                >
+                  {num}
+                </div>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Lucky Symbol: <span className="font-medium">{content.symbol}</span>
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   const renderSection = (sectionKey: string, title: string, content: any, index: number) => {
     const Icon = SECTION_ICONS[sectionKey as keyof typeof SECTION_ICONS];
     const isAccessible = isSectionAccessible(sectionKey);
-    
+
     return (
       <motion.div
         key={sectionKey}
@@ -121,100 +248,20 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.1, duration: 0.5 }}
       >
-        <Card className={`border-border/40 relative ${!isAccessible ? 'overflow-hidden' : ''}`}>
+        {/* min-h ensures locked cards are tall enough for the overlay CTA */}
+        <Card className={`border-border/40 relative overflow-hidden ${!isAccessible ? "min-h-[220px]" : ""}`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Icon className="h-5 w-5" />
               {title}
-              {!isAccessible && <Lock className="h-4 w-4 text-muted-foreground" />}
+              {!isAccessible && <Lock className="h-4 w-4 text-muted-foreground ml-auto" />}
             </CardTitle>
           </CardHeader>
-          <CardContent className={!isAccessible ? 'blur-sm' : ''}>
-            {sectionKey === 'personality' && (
-              <div className="space-y-4">
-                <p className="text-sm leading-relaxed">{content.summary}</p>
-                <div className="flex flex-wrap gap-2">
-                  {content.traits.map((trait: string, i: number) => (
-                    <Badge key={i} variant="secondary">{trait}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {sectionKey === 'life_path' && (
-              <div className="space-y-4">
-                <p className="text-sm leading-relaxed">{content.summary}</p>
-                <div className="grid gap-3">
-                  <div className="p-3 bg-muted/50 rounded-lg">
-                    <h5 className="font-medium text-sm mb-1">Life Line</h5>
-                    <p className="text-xs text-muted-foreground">{content.lines.life}</p>
-                  </div>
-                  <div className="p-3 bg-muted/50 rounded-lg">
-                    <h5 className="font-medium text-sm mb-1">Head Line</h5>
-                    <p className="text-xs text-muted-foreground">{content.lines.head}</p>
-                  </div>
-                  <div className="p-3 bg-muted/50 rounded-lg">
-                    <h5 className="font-medium text-sm mb-1">Heart Line</h5>
-                    <p className="text-xs text-muted-foreground">{content.lines.heart}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {sectionKey === 'career' && (
-              <div className="space-y-4">
-                <p className="text-sm leading-relaxed">{content.summary}</p>
-                <div>
-                  <h5 className="font-medium text-sm mb-2">Recommended Fields</h5>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {content.fields.map((field: string, i: number) => (
-                      <Badge key={i} variant="outline">{field}</Badge>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h5 className="font-medium text-sm mb-2">Key Strengths</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {content.strengths.map((strength: string, i: number) => (
-                      <Badge key={i} variant="secondary">{strength}</Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {sectionKey === 'relationships' && (
-              <div className="space-y-4">
-                <p className="text-sm leading-relaxed">{content.summary}</p>
-              </div>
-            )}
-            
-            {sectionKey === 'health' && (
-              <div className="space-y-4">
-                <p className="text-sm leading-relaxed">{content.summary}</p>
-              </div>
-            )}
-            
-            {sectionKey === 'lucky' && (
-              <div className="space-y-4">
-                <div className="text-center p-6 bg-gradient-to-br from-primary/10 to-accent/10 rounded-lg">
-                  <Star className="h-8 w-8 mx-auto mb-3 text-primary" />
-                  <h5 className="font-medium mb-2">Your Lucky Numbers</h5>
-                  <div className="flex justify-center gap-2 mb-3">
-                    {content.numbers.map((num: number, i: number) => (
-                      <div key={i} className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-bold">
-                        {num}
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Lucky Symbol: <span className="font-medium">{content.symbol}</span>
-                  </p>
-                </div>
-              </div>
-            )}
+          <CardContent>
+            {renderSectionContent(sectionKey, content, isAccessible)}
           </CardContent>
-          
+
+          {/* Gradient + CTA overlay for locked sections */}
           {!isAccessible && renderUpgradeOverlay(sectionKey)}
         </Card>
       </motion.div>
@@ -254,17 +301,12 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
             <CardContent className="pt-6">
               <div className="flex items-center gap-6">
                 <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-muted">
-                  <Image
-                    src={imageUrl}
-                    alt="Palm photo"
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={imageUrl} alt="Palm photo" fill className="object-cover" />
                 </div>
                 <div>
                   <h3 className="font-semibold mb-1">Palm Analysis Complete</h3>
                   <p className="text-sm text-muted-foreground">
-                    AI analysis of {profileName}'s palm reading
+                    AI analysis of {profileName}&apos;s palm reading
                   </p>
                 </div>
               </div>
@@ -275,35 +317,40 @@ export function ReadingDisplay({ analysis, profileName, imageUrl }: ReadingDispl
 
       {/* Reading sections */}
       <div className="grid gap-6">
-        {renderSection('personality', 'Personality', analysis.personality, 0)}
-        {renderSection('life_path', 'Life Path', analysis.life_path, 1)}
-        {renderSection('career', 'Career', analysis.career, 2)}
-        {renderSection('relationships', 'Relationships', analysis.relationships, 3)}
-        {renderSection('health', 'Health', analysis.health, 4)}
-        {renderSection('lucky', 'Lucky Numbers', analysis.lucky, 5)}
+        {renderSection("personality", "Personality", analysis.personality, 0)}
+        {renderSection("life_path", "Life Path", analysis.life_path, 1)}
+        {renderSection("career", "Career", analysis.career, 2)}
+        {renderSection("relationships", "Relationships", analysis.relationships, 3)}
+        {renderSection("health", "Health", analysis.health, 4)}
+        {renderSection("lucky", "Lucky Numbers", analysis.lucky, 5)}
       </div>
 
-      {/* Upgrade prompt for basic users */}
-      {accessTier?.tier === "basic" && (
+      {/* Upgrade prompt for basic/trial users */}
+      {(accessTier?.tier === "basic" || accessTier?.tier === "trial") && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8, duration: 0.5 }}
         >
-          <Card className="border-accent/50 bg-accent/5">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Crown className="h-5 w-5 text-accent" />
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="pt-6 pb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <Crown className="h-5 w-5 text-primary" />
+                </div>
                 <div className="flex-1">
-                  <p className="font-medium text-sm">Unlock more insights</p>
-                  <p className="text-xs text-muted-foreground">
-                    Upgrade to Pro for relationships, health insights and more
+                  <p className="font-medium">Unlock deeper insights</p>
+                  <p className="text-sm text-muted-foreground">
+                    Upgrade to Pro ($4.99/mo) for Relationships, Health, Lucky Numbers,
+                    daily horoscope, and 5 readings per month.
                   </p>
                 </div>
-                <Button size="sm" className="gap-2">
-                  <Crown className="h-4 w-4" />
-                  Upgrade
-                </Button>
+                <Link href="/pricing">
+                  <Button className="gap-2 shrink-0">
+                    <Crown className="h-4 w-4" />
+                    Upgrade to Pro
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>

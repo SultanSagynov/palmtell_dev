@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,16 +9,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useUser } from "@clerk/nextjs";
-import { 
-  Plus, 
-  User, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  User,
+  Edit,
+  Trash2,
   Calendar,
   Star,
   BookOpen,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Crown,
+  Lock,
 } from "lucide-react";
 import { getZodiacSign } from "@/lib/horoscope";
 
@@ -276,16 +279,40 @@ export default function ProfilesPage() {
         </Dialog>
       </div>
 
+      {/* No-plan guidance */}
+      {userData && userData.accessTier === "expired" && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex items-start gap-3 pt-5 pb-5">
+            <Lock className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Your profile is ready — now get your reading</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                You have a profile set up. Purchase a plan to unlock your AI palm reading.
+                Start with a one-time $0.99 reading or subscribe for ongoing insights.
+              </p>
+            </div>
+            <Link href="/pricing">
+              <Button size="sm" className="shrink-0 gap-1">
+                <Crown className="h-3 w-3" />
+                View Plans
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Profile limit info */}
-      {userData && (
+      {userData && userData.accessTier !== "expired" && (
         <Card className="border-border/40 bg-muted/20">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
                 <strong className="text-foreground">
-                  {profiles.length} of {userData.profileLimit === Infinity ? "∞" : userData.profileLimit} profiles used
+                  {profiles.length} of{" "}
+                  {userData.profileLimit === Infinity ? "∞" : userData.profileLimit} profiles used
                 </strong>
                 {userData.accessTier === "trial" && " (Upgrade to Pro for 3 profiles)"}
+                {userData.accessTier === "basic" && " (Upgrade to Pro for 3 profiles)"}
               </p>
               {!canAddProfile && userData.profileLimit !== Infinity && (
                 <Badge variant="outline">Limit Reached</Badge>
@@ -420,7 +447,8 @@ export default function ProfilesPage() {
           <p className="text-sm text-muted-foreground">
             <strong className="text-foreground">Tip:</strong> Add a date of
             birth to unlock horoscope and lucky numbers for each profile.
-            {userData?.accessTier === "trial" && " Upgrade to Pro to create up to 3 profiles and read palms for your loved ones."}
+            {(userData?.accessTier === "trial" || userData?.accessTier === "basic") &&
+              " Upgrade to Pro to create up to 3 profiles and read palms for your loved ones."}
           </p>
         </CardContent>
       </Card>

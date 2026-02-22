@@ -91,3 +91,50 @@ export async function deletePalmSession(sessionToken: string): Promise<void> {
     console.error("Failed to delete palm session:", error);
   }
 }
+
+// --- Palm validation rate limiting ---
+// After 3 failures within a window, block for 10 minutes.
+const RATE_LIMIT_MAX_FAILURES = 3;
+const RATE_LIMIT_WINDOW_SECONDS = 600; // 10 minutes
+
+export async function checkPalmValidationRateLimit(
+  clerkId: string
+): Promise<{ limited: boolean; waitMinutes: number }> {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return { limited: false, waitMinutes: 0 };
+  }
+
+  try {
+    const key = `palm_validate_fails:${clerkId}`;
+    const raw = await redis.get(key);
+    const failures = raw ? Number(raw) : 0;
+
+    if (failures >= RATE_LIMIT_MAX_FAILURES) {
+      const ttl = await redis.ttl(key);
+      const waitMinutes = Math.ceil(Math.max(ttl, 0) / 60);
+      return { limited: true, waitMinutes };
+    }
+
+    return { limited: false, waitMinutes: 0 };
+  } catch (error) {
+    console.error("Failed to check palm validation rate limit:", error);
+    return { limited: false, waitMinutes: 0 };
+  }
+}
+
+export async function recordPalmValidationFailure(clerkId: string): Promise<void> {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return;
+  }
+
+  try {
+    const key = `palm_validate_fails:${clerkId}`;
+    const current = await redis.incr(key);
+    // Set/refresh the TTL only when the key is first created
+    if (current === 1) {
+      await redis.expire(key, RATE_LIMIT_WINDOW_SECONDS);
+    }
+  } catch (error) {
+    console.error("Failed to record palm validation failure:", error);
+  }
+}

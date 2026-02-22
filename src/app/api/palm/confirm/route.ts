@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { getPalmSession, confirmPalmSession } from "@/lib/session-storage";
+import { getPalmSession, confirmPalmSession, checkPalmValidationRateLimit, recordPalmValidationFailure } from "@/lib/session-storage";
 import { validatePalmImage } from "@/lib/palm-validation";
 import { getSignedR2Url } from "@/lib/r2";
 import { db } from "@/lib/db";
@@ -11,6 +11,19 @@ export async function POST(req: NextRequest) {
     const { userId: clerkId } = await auth();
     if (!clerkId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check rate limit before burning tokens on validation
+    const rateLimit = await checkPalmValidationRateLimit(clerkId);
+    if (rateLimit.limited) {
+      return NextResponse.json(
+        {
+          error: `Too many failed attempts. Please wait ${rateLimit.waitMinutes} minute${rateLimit.waitMinutes !== 1 ? 's' : ''} before trying again.`,
+          rateLimited: true,
+          waitMinutes: rateLimit.waitMinutes,
+        },
+        { status: 429 }
+      );
     }
 
     const sessionToken = req.cookies.get('palm_session')?.value;
@@ -51,6 +64,8 @@ export async function POST(req: NextRequest) {
 
     if (!validation.is_valid) {
       console.error(`Palm validation failed: ${validation.reason}`);
+      // Record failure for rate limiting
+      await recordPalmValidationFailure(clerkId);
       return NextResponse.json(
         { error: validation.reason || "Palm validation failed" },
         { status: 400 }

@@ -6,30 +6,32 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Hand, 
-  BookOpen, 
-  Star, 
-  ArrowRight, 
-  Clock,
-  Calendar,
-  User
+import {
+  Hand,
+  BookOpen,
+  Star,
+  ArrowRight,
+  Crown,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 
 interface Reading {
   id: string;
   createdAt: string;
   analysisJson: any;
+  profile?: { name: string };
 }
 
 interface UserData {
   palmConfirmed: boolean;
   palmPhotoUrl: string | null;
   dob: string | null;
+  accessTier: string;
   subscription?: {
     plan: string;
     status: string;
-  };
+  } | null;
 }
 
 export default function DashboardPage() {
@@ -44,18 +46,16 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      // Load user readings (no profile filtering needed)
-      const readingsRes = await fetch("/api/readings");
+      const [readingsRes, userRes] = await Promise.all([
+        fetch("/api/readings"),
+        fetch("/api/user/access"),
+      ]);
       if (readingsRes.ok) {
         const readingsData = await readingsRes.json();
         setReadings(readingsData.readings || []);
       }
-
-      // Load user data
-      const userRes = await fetch("/api/user/access");
       if (userRes.ok) {
-        const accessData = await userRes.json();
-        setUserData(accessData);
+        setUserData(await userRes.json());
       }
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
@@ -65,26 +65,51 @@ export default function DashboardPage() {
   };
 
   const getPlanBadge = () => {
+    const tier = userData?.accessTier;
+    if (tier === "trial") return <Badge variant="secondary">Trial</Badge>;
     if (userData?.subscription?.status === "active") {
-      const planName = userData.subscription.plan === "basic" ? "Basic" : 
-                      userData.subscription.plan === "pro" ? "Pro" : "Ultimate";
+      const names: Record<string, string> = { basic: "Basic", pro: "Pro", ultimate: "Ultimate" };
       return (
         <Badge variant="default" className="bg-green-500">
-          {planName}
+          {names[userData.subscription.plan] ?? userData.subscription.plan}
         </Badge>
       );
     }
-    
     return <Badge variant="destructive">No Active Plan</Badge>;
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
+
+  const tier = userData?.accessTier;
+  const hasNoAccess = !tier || tier === "expired";
+  const palmConfirmed = userData?.palmConfirmed;
+
+  // Steps for users who haven't completed setup
+  const setupSteps = [
+    {
+      label: "Sign up",
+      done: true,
+    },
+    {
+      label: "Confirm your palm",
+      done: !!palmConfirmed,
+      href: "/palm/upload",
+      cta: "Setup Palm",
+    },
+    {
+      label: "Purchase a plan",
+      done: !hasNoAccess,
+      href: "/pricing",
+      cta: "View Plans",
+    },
+  ];
+  const allSetupDone = setupSteps.every((s) => s.done);
 
   return (
     <div className="space-y-8">
@@ -98,44 +123,41 @@ export default function DashboardPage() {
         {getPlanBadge()}
       </div>
 
-      {/* Palm status card */}
-      {userData && (
-        <Card className="border-border/40">
+      {/* Setup checklist for users who haven't completed onboarding */}
+      {!allSetupDone && (
+        <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Hand className="h-5 w-5" />
-              Your Palm Reading Profile
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Crown className="h-5 w-5 text-primary" />
+              Complete your setup to get your first reading
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Hand className="h-8 w-8 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="font-medium">
-                  {userData.palmConfirmed ? "Palm Confirmed" : "Palm Setup Required"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {userData.palmConfirmed 
-                    ? "Your palm is locked and ready for readings"
-                    : "Complete palm setup to start getting readings"
-                  }
-                </p>
-                {userData.dob && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Birth date: {new Date(userData.dob).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-              {!userData.palmConfirmed && (
-                <Link href="/palm/upload">
-                  <Button size="sm">
-                    Setup Palm
-                  </Button>
-                </Link>
-              )}
-            </div>
+            <ol className="space-y-3">
+              {setupSteps.map((step) => (
+                <li key={step.label} className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {step.done ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
+                    )}
+                    <span
+                      className={`text-sm ${step.done ? "line-through text-muted-foreground" : "font-medium"}`}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
+                  {!step.done && step.href && (
+                    <Link href={step.href}>
+                      <Button size="sm" variant="outline" className="shrink-0">
+                        {step.cta}
+                      </Button>
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ol>
           </CardContent>
         </Card>
       )}
@@ -149,11 +171,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Upload a palm photo to get your AI analysis.
+              {hasNoAccess
+                ? "Purchase a plan to start your first reading."
+                : "Upload a palm photo to get your AI analysis."}
             </p>
-            <Link href="/dashboard/readings/new" className="mt-4 inline-block">
+            <Link href={hasNoAccess ? "/pricing" : "/dashboard/readings/new"} className="mt-4 inline-block">
               <Button size="sm" className="gap-1">
-                Start Reading
+                {hasNoAccess ? "View Plans" : "Start Reading"}
                 <ArrowRight className="h-3 w-3" />
               </Button>
             </Link>
@@ -179,14 +203,14 @@ export default function DashboardPage() {
 
         <Card className="border-border/40">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Daily Horoscope
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Daily Horoscope</CardTitle>
             <Star className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Set your date of birth to unlock daily horoscopes.
+              {tier === "pro" || tier === "ultimate"
+                ? "View your daily cosmic insights."
+                : "Available on Pro and Ultimate plans."}
             </p>
             <Link href="/dashboard/horoscope" className="mt-4 inline-block">
               <Button variant="outline" size="sm" className="gap-1">
@@ -217,16 +241,16 @@ export default function DashboardPage() {
                         <Hand className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium">Palm Reading</p>
+                        <p className="font-medium">
+                          Palm Reading{reading.profile ? ` — ${reading.profile.name}` : ""}
+                        </p>
                         <p className="text-sm text-muted-foreground">
                           {new Date(reading.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="default">
-                        Completed
-                      </Badge>
+                      <Badge variant="default">Completed</Badge>
                       <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
@@ -244,11 +268,19 @@ export default function DashboardPage() {
             <div className="text-center py-8">
               <Hand className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">No readings yet</p>
-              <Link href="/dashboard/readings/new" className="mt-4 inline-block">
-                <Button size="sm">
-                  Create First Reading
-                </Button>
-              </Link>
+              {!hasNoAccess && palmConfirmed && (
+                <Link href="/dashboard/readings/new" className="mt-4 inline-block">
+                  <Button size="sm">Create First Reading</Button>
+                </Link>
+              )}
+              {hasNoAccess && (
+                <Link href="/pricing" className="mt-4 inline-block">
+                  <Button size="sm" className="gap-2">
+                    <Crown className="h-4 w-4" />
+                    Get Your First Reading
+                  </Button>
+                </Link>
+              )}
             </div>
           )}
         </CardContent>
